@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 futures = { workspace = true }
-protocol = { workspace = true }
+network_protocol = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }

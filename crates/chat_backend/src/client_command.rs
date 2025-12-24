@@ -1,4 +1,4 @@
-use protocol::NetworkCommand;
+use network_protocol::NetworkCommand;
 
 #[derive(Debug)]
 pub enum ClientCommand {

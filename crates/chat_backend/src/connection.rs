@@ -5,8 +5,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio_util::codec::Framed;
 
-use protocol::codecs::ClientCodec;
-use protocol::{NetworkCommand, NetworkEvent};
+use network_protocol::codecs::ClientCodec;
+use network_protocol::{NetworkCommand, NetworkEvent};
 
 #[derive(Debug)]
 pub struct Connection {

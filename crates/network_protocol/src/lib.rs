@@ -1,5 +1,5 @@
 mod protobuf_items {
-    include!(concat!(env!("OUT_DIR"), "/protocol.items.rs"));
+    include!(concat!(env!("OUT_DIR"), "/network_protocol.items.rs"));
 }
 
 mod network_command;

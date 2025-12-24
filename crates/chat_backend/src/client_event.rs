@@ -2,7 +2,7 @@ use std::io;
 
 use thiserror::Error;
 
-use protocol::NetworkEvent;
+use network_protocol::NetworkEvent;
 
 #[derive(Debug, Error)]
 pub enum EventError {

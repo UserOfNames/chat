@@ -4,7 +4,7 @@ mod connection;
 
 use std::io;
 
-use protocol::{NetworkCommand, NetworkEvent};
+use network_protocol::{NetworkCommand, NetworkEvent};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use client_command::ClientCommand;

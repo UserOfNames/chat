@@ -14,10 +14,9 @@ bytes = "1"
 color-eyre = "0.6"
 futures = "0.3"
 prost = "0.14"
-ratatui = "0.29"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 
 chat_backend = { path = "./crates/chat_backend/" }
-protocol = { path = "./crates/protocol/" }
+network_protocol = { path = "./crates/network_protocol/" }
