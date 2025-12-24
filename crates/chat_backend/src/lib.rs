@@ -41,8 +41,7 @@ impl ChatBackend {
         (backend, controller)
     }
 
-    #[expect(clippy::missing_panics_doc)]
-    pub async fn run(&mut self) -> io::Result<()> {
+    pub async fn run(mut self) -> io::Result<()> {
         loop {
             tokio::select! {
                 Some(event_result) = async {
