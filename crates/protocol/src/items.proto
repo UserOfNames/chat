@@ -1,0 +1,16 @@
+syntax = "proto3";
+package protocol.items;
+
+import "google/protobuf/empty.proto";
+
+message CommandFrame {
+  oneof variant {
+    string send_message = 1;
+  }
+}
+
+message EventFrame {
+  oneof variant {
+    string received_message = 1;
+  }
+}

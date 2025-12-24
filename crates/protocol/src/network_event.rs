@@ -1,0 +1,30 @@
+use crate::protobuf_items::{EventFrame, event_frame};
+
+pub enum NetworkEvent {
+    ReceivedMessage(String),
+}
+
+impl TryFrom<EventFrame> for NetworkEvent {
+    // TODO: Actual error type
+    type Error = ();
+
+    fn try_from(value: EventFrame) -> Result<Self, Self::Error> {
+        match value.variant {
+            Some(event_frame::Variant::ReceivedMessage(message)) => {
+                Ok(NetworkEvent::ReceivedMessage(message))
+            }
+
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<NetworkEvent> for EventFrame {
+    fn from(value: NetworkEvent) -> Self {
+        match value {
+            NetworkEvent::ReceivedMessage(message) => EventFrame {
+                variant: Some(event_frame::Variant::ReceivedMessage(message)),
+            },
+        }
+    }
+}
