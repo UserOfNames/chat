@@ -8,27 +8,27 @@ use network_protocol::{NetworkCommand, NetworkEvent};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use client_command::ClientCommand;
-use client_event::{ClientEvent, EventError, EventResult};
+use client_event::ClientEvent;
 use connection::Connection;
 
 #[derive(Debug)]
 pub struct BackendHandle {
     pub cmd_tx: Sender<ClientCommand>,
-    pub event_rx: Receiver<EventResult>,
+    pub event_rx: Receiver<client_event::Result>,
 }
 
 #[derive(Debug)]
 pub struct ChatBackend {
     connection: Option<Connection>,
     cmd_rx: Receiver<ClientCommand>,
-    event_tx: Sender<EventResult>,
+    event_tx: Sender<client_event::Result>,
 }
 
 impl ChatBackend {
     #[must_use]
     pub fn new() -> (Self, BackendHandle) {
         let (cmd_tx, cmd_rx) = mpsc::channel::<ClientCommand>(128); // TODO: Buffer size
-        let (event_tx, event_rx) = mpsc::channel::<EventResult>(128); // TODO: Buffer size
+        let (event_tx, event_rx) = mpsc::channel::<client_event::Result>(128); // TODO: Buffer size
 
         let controller = BackendHandle { cmd_tx, event_rx };
 
@@ -54,7 +54,7 @@ impl ChatBackend {
                     match event_result {
                         Ok(event) => self.handle_event(event).await,
                         Err(e) => {
-                            self.send_ui_error(EventError::Io(e)).await;
+                            self.send_ui_error(client_event::Error::Io(e)).await;
                         }
                     }
                 }
@@ -139,7 +139,7 @@ impl ChatBackend {
             .expect("UI channel closed. This indicates that the UI ungracefully failed without the backend.");
     }
 
-    async fn send_ui_error(&mut self, error: EventError) {
+    async fn send_ui_error(&mut self, error: client_event::Error) {
         // TODO: Log error
         self.event_tx.send(Err(error))
             .await

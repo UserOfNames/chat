@@ -1,16 +1,17 @@
 use std::io;
+use std::result::Result as StdResult;
 
 use thiserror::Error;
 
 use network_protocol::NetworkEvent;
 
 #[derive(Debug, Error)]
-pub enum EventError {
+pub enum Error {
     #[error("I/O error {0}")]
     Io(#[from] io::Error),
 }
 
-pub type EventResult = Result<ClientEvent, EventError>;
+pub type Result = StdResult<ClientEvent, Error>;
 
 #[derive(Debug)]
 pub enum ClientEvent {
