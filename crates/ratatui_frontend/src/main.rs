@@ -7,6 +7,7 @@ use chat_backend::client_event::{self, ClientEvent};
 struct App {
     backend_receiver: Receiver<client_event::Result>,
     backend_sender: Sender<ClientCommand>,
+    is_quitting: bool,
 }
 
 impl App {
@@ -14,12 +15,15 @@ impl App {
         Self {
             backend_receiver: receiver,
             backend_sender: sender,
+            is_quitting: false,
         }
     }
 
     async fn run(mut self) {
         loop {
             tokio::select! {
+                // TODO: In the input handling loop, check for double quit and force break.
+
                 event = self.backend_receiver.recv() => {
                     match event {
                         Some(Ok(evt)) => self.handle_event(evt).await,
@@ -38,6 +42,14 @@ impl App {
     async fn handle_event_error(&self, error: client_event::Error) {
         todo!("Implement event errors");
     }
+
+    async fn quit(&mut self) {
+        self.is_quitting = true;
+
+        // If this fails, the backend is already closed, and the next select! loop will detect
+        // that. As such, we don't care about the Result here.
+        let _: Result<_, _> = self.backend_sender.send(ClientCommand::Quit).await;
+    }
 }
 
 #[tokio::main]
@@ -46,10 +58,10 @@ async fn main() -> Result<(), tokio::task::JoinError> {
     let app = App::new(handle.event_rx, handle.cmd_tx);
 
     let backend_task = tokio::spawn(backend.run());
-
     app.run().await;
 
-    // This is a NOP if the backend task is already done, so this doesn't affect clean exits.
+    // Fallback to kill the backend in case the user force-quits while the backend is hanging. This
+    // is a NOP if the backend task is already done, so this doesn't affect clean exits.
     backend_task.abort();
 
     Ok(())

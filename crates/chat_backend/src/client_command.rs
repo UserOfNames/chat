@@ -2,8 +2,12 @@ use network_protocol::NetworkCommand;
 
 #[derive(Debug)]
 pub enum ClientCommand {
+    // Local-only
     Connect(String),
     Disconnect,
+    Quit,
+
+    // Network pass-through
     SendMessage(String),
 }
 

@@ -58,15 +58,18 @@ impl ChatBackend {
                     }
                 }
 
-                Some(command) = self.cmd_rx.recv() => self.handle_command(command).await,
-
-                // TODO: Consider an explicit else case. If the channel to the frontend (cmd_rx) is
-                // lost, there's really nothing better to do than abort anyways, so panicking
-                // (default behavior when all branches cancel) is fine. However, we can probably do
-                // a better job logging the error, and maybe doing some cleanup. We may also need
-                // to handle the case where the frontend is lost, but the connection is still live.
+                command = self.cmd_rx.recv() => {
+                    match command {
+                        Some(cmd) => self.handle_command(cmd).await,
+                        None => self.handle_ui_crash().await,
+                    }
+                }
             }
         }
+    }
+
+    async fn handle_ui_crash(&mut self) {
+        todo!("Handle UI crash")
     }
 
     async fn handle_command(&mut self, command: ClientCommand) {
