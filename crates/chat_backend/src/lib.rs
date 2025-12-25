@@ -41,7 +41,7 @@ impl ChatBackend {
         (backend, controller)
     }
 
-    pub async fn run(mut self) -> io::Result<()> {
+    pub async fn run(mut self) {
         loop {
             tokio::select! {
                 Some(event_result) = async {

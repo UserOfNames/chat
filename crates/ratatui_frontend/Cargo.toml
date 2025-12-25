@@ -6,4 +6,6 @@ edition = "2024"
 [dependencies]
 color-eyre = { workspace = true }
 ratatui = "0.29"
+tokio = { workspace = true }
+
 chat_backend = { workspace = true }
