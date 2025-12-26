@@ -1,3 +1,7 @@
+use std::io;
+
+use ratatui::{DefaultTerminal, Frame};
+use thiserror::Error;
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use chat_backend::ChatBackend;
@@ -10,6 +14,16 @@ struct App {
     is_quitting: bool,
 }
 
+#[derive(Debug, Error)]
+enum AppError {
+    #[error("I/O error: {0}")]
+    Io(#[from] io::Error),
+    #[error("Backend connection lost")]
+    BackendDied,
+}
+
+type AppResult = Result<(), AppError>;
+
 impl App {
     fn new(receiver: Receiver<client_event::Result>, sender: Sender<ClientCommand>) -> Self {
         Self {
@@ -19,8 +33,14 @@ impl App {
         }
     }
 
-    async fn run(mut self) {
+    async fn run(mut self, terminal: &mut DefaultTerminal) -> AppResult {
         loop {
+            match terminal.draw(|frame| self.draw(frame)) {
+                Ok(_) => {}
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Err(e.into()),
+            }
+
             tokio::select! {
                 // TODO: In the input handling loop, check for double quit and force break.
 
@@ -28,11 +48,16 @@ impl App {
                     match event {
                         Some(Ok(evt)) => self.handle_event(evt).await,
                         Some(Err(e)) => self.handle_event_error(e).await,
-                        None => break, // This indicates the backend has shut down
+                        None if self.is_quitting => return Ok(()),
+                        None => return Err(AppError::BackendDied),
                     }
                 }
             }
         }
+    }
+
+    fn draw(&self, terminal: &mut Frame) {
+        todo!("Implement drawing");
     }
 
     async fn handle_event(&mut self, event: ClientEvent) {
@@ -57,8 +82,12 @@ async fn main() -> Result<(), tokio::task::JoinError> {
     let (backend, handle) = ChatBackend::new();
     let app = App::new(handle.event_rx, handle.cmd_tx);
 
+    let mut terminal = ratatui::init();
+
     let backend_task = tokio::spawn(backend.run());
-    app.run().await;
+    app.run(&mut terminal).await;
+
+    ratatui::restore();
 
     // Fallback to kill the backend in case the user force-quits while the backend is hanging. This
     // is a NOP if the backend task is already done, so this doesn't affect clean exits.
