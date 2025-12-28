@@ -3,6 +3,7 @@ pub mod client_event;
 mod connection;
 
 use std::io;
+use std::ops::ControlFlow;
 
 use network_protocol::{NetworkCommand, NetworkEvent};
 use tokio::sync::mpsc::{self, Receiver, Sender};
@@ -59,32 +60,41 @@ impl ChatBackend {
                 }
 
                 command = self.cmd_rx.recv() => {
-                    match command {
-                        Some(cmd) => self.handle_command(cmd).await,
-                        None => self.handle_ui_crash().await,
+                    if let Some(cmd) = command {
+                        if let ControlFlow::Break(()) = self.handle_command(cmd).await {
+                            break;
+                        }
+                    } else {
+                        self.handle_ui_crash().await;
+                        break;
                     }
                 }
             }
         }
+
+        self.shutdown().await;
     }
 
     async fn handle_ui_crash(&mut self) {
         todo!("Handle UI crash")
     }
 
-    async fn handle_command(&mut self, command: ClientCommand) {
+    async fn handle_command(&mut self, command: ClientCommand) -> ControlFlow<()> {
         #[allow(clippy::match_wildcard_for_single_variants)]
         match command {
             ClientCommand::Connect(addr) => self.connect(addr).await,
             ClientCommand::Disconnect => self.disconnect().await,
+            ClientCommand::Quit => return ControlFlow::Break(()),
 
-            // If we get here, all remaining ClientCommands should have a NetworkComman equivalent
+            // If we get here, all remaining ClientCommands should have a NetworkCommand equivalent
             _ => {
                 let command = NetworkCommand::try_from(command)
                     .expect("Improper conversion from ClientCommand to NetworkCommand. You did not handle a special case.");
                 self.send_network_command(command).await;
             }
         }
+
+        ControlFlow::Continue(())
     }
 
     async fn handle_event(&mut self, event: NetworkEvent) {
@@ -146,5 +156,11 @@ impl ChatBackend {
         self.event_tx.send(Err(error))
             .await
             .expect("UI channel closed. This indicates that the UI ungracefully failed without the backend.");
+    }
+
+    async fn shutdown(mut self) {
+        if let Some(connection) = self.connection.take() {
+            connection.disconnect().await;
+        }
     }
 }
