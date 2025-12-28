@@ -11,3 +11,4 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 
 chat_backend = { workspace = true }
+tui-textarea = "0.7.0"

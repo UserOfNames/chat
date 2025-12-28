@@ -1,20 +1,35 @@
 use std::io;
 
-use crossterm::event::{Event, EventStream, KeyCode, KeyEvent};
+use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::StreamExt;
-use ratatui::{DefaultTerminal, Frame};
+use ratatui::{
+    layout::{Constraint, Direction, Layout}, widgets::Block, DefaultTerminal, Frame
+};
 use thiserror::Error;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::{
+    sync::mpsc::{Receiver, Sender},
+    time::{Duration, interval},
+};
+use tui_textarea::TextArea;
 
 use chat_backend::ChatBackend;
 use chat_backend::client_command::ClientCommand;
 use chat_backend::client_event::{self, ClientEvent};
 
-struct App {
+#[derive(Debug, PartialEq, Eq)]
+enum Focus {
+    None,
+    TextBox,
+}
+
+#[derive(Debug)]
+struct App<'a> {
     backend_receiver: Receiver<client_event::Result>,
     backend_sender: Sender<ClientCommand>,
     event_stream: EventStream,
     is_quitting: bool,
+    focus: Focus,
+    textbox: TextArea<'a>,
 }
 
 #[derive(Debug, Error)]
@@ -27,17 +42,25 @@ enum AppError {
 
 type AppResult = Result<(), AppError>;
 
-impl App {
+impl App<'_> {
     fn new(receiver: Receiver<client_event::Result>, sender: Sender<ClientCommand>) -> Self {
+        let block = Block::bordered().title("Input");
+        let mut textbox = TextArea::default();
+        textbox.set_block(block);
+
         Self {
             backend_receiver: receiver,
             backend_sender: sender,
             event_stream: EventStream::new(),
             is_quitting: false,
+            focus: Focus::None,
+            textbox,
         }
     }
 
     async fn run(mut self, terminal: &mut DefaultTerminal) -> AppResult {
+        let mut render_interval = interval(Duration::from_millis(250));
+
         loop {
             match terminal.draw(|frame| self.draw(frame)) {
                 Ok(_) => {}
@@ -47,6 +70,8 @@ impl App {
 
             tokio::select! {
                 // TODO: In the input handling loop, check for double quit and force break.
+
+                _ = render_interval.tick() => {}
 
                 event = self.backend_receiver.recv() => {
                     match event {
@@ -69,7 +94,25 @@ impl App {
     }
 
     fn draw(&self, frame: &mut Frame) {
-        frame.render_widget("placeholder", frame.area());
+        let outer_splits = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
+            .split(frame.area());
+
+        let message_part = outer_splits[0];
+        let sidebar = outer_splits[1];
+
+        let message_part_splits = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
+            .split(message_part);
+
+        let messages = message_part_splits[0];
+        let input = message_part_splits[1];
+
+        frame.render_widget("sidebar", sidebar);
+        frame.render_widget("messages", messages);
+        frame.render_widget(&self.textbox, input);
     }
 
     async fn handle_client_event(&mut self, event: ClientEvent) {
@@ -81,14 +124,27 @@ impl App {
     }
 
     async fn handle_terminal_event(&mut self, event: Event) {
-        if let Event::Key(k) = event {
+        if let Event::Key(k) = event
+            && k.kind == KeyEventKind::Press
+        {
             self.handle_key_event(k).await;
         }
     }
 
     async fn handle_key_event(&mut self, key: KeyEvent) {
-        if let KeyCode::Esc = key.code {
-            self.quit().await;
+        match self.focus {
+            Focus::None => match key.code {
+                KeyCode::Esc => self.quit().await,
+                KeyCode::Char('i') => self.focus = Focus::TextBox,
+                _ => {}
+            },
+
+            Focus::TextBox => match key.code {
+                KeyCode::Esc => self.focus = Focus::None,
+                _ => {
+                    self.textbox.input(key);
+                }
+            },
         }
     }
 
