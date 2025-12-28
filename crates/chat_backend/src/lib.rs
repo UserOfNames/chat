@@ -159,8 +159,6 @@ impl ChatBackend {
     }
 
     async fn shutdown(mut self) {
-        if let Some(connection) = self.connection.take() {
-            connection.disconnect().await;
-        }
+        self.disconnect().await;
     }
 }

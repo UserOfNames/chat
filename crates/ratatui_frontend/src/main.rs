@@ -21,7 +21,7 @@ struct App {
 enum AppError {
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
-    #[error("Backend connection lost")]
+    #[error("Backend died unexpectedly")]
     BackendDied,
 }
 
@@ -69,7 +69,7 @@ impl App {
     }
 
     fn draw(&self, frame: &mut Frame) {
-        frame.render_widget("hello world", frame.area());
+        frame.render_widget("placeholder", frame.area());
     }
 
     async fn handle_client_event(&mut self, event: ClientEvent) {
@@ -102,14 +102,14 @@ impl App {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), tokio::task::JoinError> {
+async fn main() -> AppResult {
     let (backend, handle) = ChatBackend::new();
     let app = App::new(handle.event_rx, handle.cmd_tx);
 
     let mut terminal = ratatui::init();
 
     let backend_task = tokio::spawn(backend.run());
-    app.run(&mut terminal).await;
+    let app_result = app.run(&mut terminal).await;
 
     ratatui::restore();
 
@@ -117,5 +117,5 @@ async fn main() -> Result<(), tokio::task::JoinError> {
     // is a NOP if the backend task is already done, so this doesn't affect clean exits.
     backend_task.abort();
 
-    Ok(())
+    app_result
 }
