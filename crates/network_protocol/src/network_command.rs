@@ -1,5 +1,6 @@
 use crate::protobuf_items::{CommandFrame, command_frame};
 
+#[derive(Debug, Clone)]
 pub enum NetworkCommand {
     SendMessage(String),
 }

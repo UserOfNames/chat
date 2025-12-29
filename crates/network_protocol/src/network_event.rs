@@ -1,5 +1,6 @@
 use crate::protobuf_items::{EventFrame, event_frame};
 
+#[derive(Debug, Clone)]
 pub enum NetworkEvent {
     ReceivedMessage(String),
 }

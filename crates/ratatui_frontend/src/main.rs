@@ -3,7 +3,9 @@ use std::io;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use futures::StreamExt;
 use ratatui::{
-    layout::{Constraint, Direction, Layout}, widgets::Block, DefaultTerminal, Frame
+    DefaultTerminal, Frame,
+    layout::{Constraint, Direction, Layout},
+    widgets::Block,
 };
 use thiserror::Error;
 use tokio::{
