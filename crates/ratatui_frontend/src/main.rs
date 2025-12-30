@@ -1,6 +1,8 @@
+mod ui;
+
 use std::io;
 
-use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{Event, EventStream, KeyEvent, KeyEventKind};
 use futures::StreamExt;
 use ratatui::{
     DefaultTerminal, Frame,
@@ -18,21 +20,11 @@ use chat_backend::ChatBackend;
 use chat_backend::client_command::ClientCommand;
 use chat_backend::client_event::{self, ClientEvent};
 
-#[derive(Debug, PartialEq, Eq)]
-enum Focus {
-    None,
-    TextBox,
-}
-
-#[derive(Debug)]
-struct App<'a> {
-    backend_receiver: Receiver<client_event::Result>,
-    backend_sender: Sender<ClientCommand>,
-    event_stream: EventStream,
-    is_quitting: bool,
-    focus: Focus,
-    textbox: TextArea<'a>,
-}
+use ui::{
+    Action, KeyHandler,
+    focus::Focus,
+    popup::{Popup, popup_area},
+};
 
 #[derive(Debug, Error)]
 enum AppError {
@@ -43,6 +35,17 @@ enum AppError {
 }
 
 type AppResult = Result<(), AppError>;
+
+#[derive(Debug)]
+struct App<'a> {
+    backend_receiver: Receiver<client_event::Result>,
+    backend_sender: Sender<ClientCommand>,
+    event_stream: EventStream,
+    is_quitting: bool,
+    focus: Focus,
+    popups: Vec<Popup>,
+    textbox: TextArea<'a>,
+}
 
 impl App<'_> {
     fn new(receiver: Receiver<client_event::Result>, sender: Sender<ClientCommand>) -> Self {
@@ -55,7 +58,8 @@ impl App<'_> {
             backend_sender: sender,
             event_stream: EventStream::new(),
             is_quitting: false,
-            focus: Focus::None,
+            focus: Focus::Normal,
+            popups: Vec::new(),
             textbox,
         }
     }
@@ -96,25 +100,29 @@ impl App<'_> {
     }
 
     fn draw(&self, frame: &mut Frame) {
-        let outer_splits = Layout::default()
+        let [message_part, sidebar] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
-            .split(frame.area());
+            .areas(frame.area());
 
-        let message_part = outer_splits[0];
-        let sidebar = outer_splits[1];
-
-        let message_part_splits = Layout::default()
+        let [messages, input] = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
-            .split(message_part);
-
-        let messages = message_part_splits[0];
-        let input = message_part_splits[1];
+            .areas(message_part);
 
         frame.render_widget("sidebar", sidebar);
         frame.render_widget("messages", messages);
         frame.render_widget(&self.textbox, input);
+
+        if let Some(popup) = self.popups.last() {
+            let (x_percent, y_percent) = match popup {
+                Popup::Commands => (60, 40),
+                Popup::Quit => (30, 20),
+            };
+
+            let area = popup_area(frame.area(), x_percent, y_percent);
+            frame.render_widget(popup, area);
+        }
     }
 
     async fn handle_client_event(&mut self, event: ClientEvent) {
@@ -134,19 +142,29 @@ impl App<'_> {
     }
 
     async fn handle_key_event(&mut self, key: KeyEvent) {
-        match self.focus {
-            Focus::None => match key.code {
-                KeyCode::Esc => self.quit().await,
-                KeyCode::Char('i') => self.focus = Focus::TextBox,
-                _ => {}
-            },
+        let action = if let Some(popup) = self.popups.last() {
+            popup.handle_key(key)
+        } else {
+            self.focus.handle_key(key)
+        };
 
-            Focus::TextBox => match key.code {
-                KeyCode::Esc => self.focus = Focus::None,
-                _ => {
-                    self.textbox.input(key);
-                }
-            },
+        self.apply_action(action).await;
+    }
+
+    async fn apply_action(&mut self, action: Action) {
+        match action {
+            Action::None => {}
+            Action::Quit => self.quit().await,
+            Action::PushPopup(popup) => self.popups.push(popup),
+            Action::ChangeFocus(focus) => self.focus = focus,
+
+            Action::PopPopup => {
+                self.popups.pop();
+            }
+
+            Action::ForwardToInput(key) => {
+                self.textbox.input(key);
+            }
         }
     }
 
