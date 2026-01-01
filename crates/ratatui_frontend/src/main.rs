@@ -23,7 +23,7 @@ use chat_backend::client_event::{self, ClientEvent};
 use ui::{
     Action, KeyHandler,
     focus::Focus,
-    popup::{Popup, popup_area},
+    popups::{Popup, popup_area},
 };
 
 #[derive(Debug, Error)]
@@ -43,7 +43,7 @@ struct App<'a> {
     event_stream: EventStream,
     is_quitting: bool,
     focus: Focus,
-    popups: Vec<Popup>,
+    popups: Vec<Box<dyn Popup>>,
     textbox: TextArea<'a>,
 }
 
@@ -115,13 +115,11 @@ impl App<'_> {
         frame.render_widget(&self.textbox, input);
 
         if let Some(popup) = self.popups.last() {
-            let (x_percent, y_percent) = match popup {
-                Popup::Commands => (60, 40),
-                Popup::Quit => (30, 20),
-            };
+            let (x_percent, y_percent) = popup.hint_size();
 
             let area = popup_area(frame.area(), x_percent, y_percent);
-            frame.render_widget(popup, area);
+
+            popup.render(area, frame.buffer_mut());
         }
     }
 

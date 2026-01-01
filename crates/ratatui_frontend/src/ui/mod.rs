@@ -1,17 +1,17 @@
 pub mod focus;
 pub mod messages;
-pub mod popup;
+pub mod popups;
 pub mod sidebar;
 
 use crossterm::event::KeyEvent;
 use focus::Focus;
-use popup::Popup;
+use popups::Popup;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Action {
     None,
     Quit,
-    PushPopup(Popup),
+    PushPopup(Box<dyn Popup>),
     PopPopup,
     ChangeFocus(Focus),
     ForwardToInput(KeyEvent),
