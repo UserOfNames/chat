@@ -7,7 +7,7 @@ use futures::StreamExt;
 use ratatui::{
     DefaultTerminal, Frame,
     layout::{Constraint, Direction, Layout},
-    widgets::Block,
+    widgets::{Block, Clear},
 };
 use thiserror::Error;
 use tokio::{
@@ -23,7 +23,11 @@ use chat_backend::client_event::{self, ClientEvent};
 use ui::{
     Action, KeyHandler,
     focus::Focus,
-    popups::{Popup, popup_area},
+    popups::{
+        Popup,
+        notice::{NoticeLevel, NoticePopup},
+        popup_area,
+    },
 };
 
 #[derive(Debug, Error)]
@@ -119,16 +123,34 @@ impl App<'_> {
 
             let area = popup_area(frame.area(), x_percent, y_percent);
 
+            frame.render_widget(Clear, area);
             popup.render(area, frame.buffer_mut());
         }
     }
 
     async fn handle_client_event(&mut self, event: ClientEvent) {
-        todo!("Implement event handling");
+        match event {
+            ClientEvent::Connected => {
+                self.notify("Connected".to_owned(), NoticeLevel::Notification)
+                    .await
+            }
+
+            ClientEvent::Disconnected => {
+                self.notify("Disconnected".to_owned(), NoticeLevel::Notification)
+                    .await
+            }
+
+            ClientEvent::ReceivedMessage(msg) => {
+                // TODO: Implement message area
+                self.notify(msg, NoticeLevel::Notification)
+                    .await
+            }
+        }
     }
 
-    async fn handle_client_event_error(&self, error: client_event::Error) {
-        todo!("Implement event errors");
+    async fn handle_client_event_error(&mut self, error: client_event::Error) {
+        let message = error.to_string();
+        self.notify(message, NoticeLevel::Error).await;
     }
 
     async fn handle_terminal_event(&mut self, event: Event) {
@@ -140,7 +162,7 @@ impl App<'_> {
     }
 
     async fn handle_key_event(&mut self, key: KeyEvent) {
-        let action = if let Some(popup) = self.popups.last() {
+        let action = if let Some(popup) = self.popups.last_mut() {
             popup.handle_key(key)
         } else {
             self.focus.handle_key(key)
@@ -163,15 +185,33 @@ impl App<'_> {
             Action::ForwardToInput(key) => {
                 self.textbox.input(key);
             }
+
+            Action::Connect(addr) => {
+                self.send_to_backend(ClientCommand::Connect(addr)).await;
+                self.popups.clear();
+            }
+
+            Action::SendMessage => {
+                let message = self.textbox.lines().join("");
+                self.send_to_backend(ClientCommand::SendMessage(message)).await;
+            }
         }
+    }
+
+    async fn notify(&mut self, message: String, level: NoticeLevel) {
+        let notice = NoticePopup::new(message, level);
+        self.popups.push(Box::new(notice));
     }
 
     async fn quit(&mut self) {
         self.is_quitting = true;
+        self.send_to_backend(ClientCommand::Quit).await;
+    }
 
+    async fn send_to_backend(&mut self, command: ClientCommand) {
         // If this fails, the backend is already closed, and the next select! loop will detect
         // that. As such, we don't care about the Result here.
-        let _: Result<_, _> = self.backend_sender.send(ClientCommand::Quit).await;
+        let _: Result<_, _> = self.backend_sender.send(command).await;
     }
 }
 

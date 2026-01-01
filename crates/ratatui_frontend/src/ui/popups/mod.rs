@@ -1,4 +1,6 @@
 pub mod commands;
+pub mod connect;
+pub mod notice;
 pub mod quit;
 
 use ratatui::{

@@ -9,7 +9,7 @@ pub enum Focus {
 }
 
 impl KeyHandler for Focus {
-    fn handle_key(&self, key: KeyEvent) -> Action {
+    fn handle_key(&mut self, key: KeyEvent) -> Action {
         match self {
             Self::Normal => match key.code {
                 KeyCode::Char('i') => Action::ChangeFocus(Focus::TextBox),
@@ -19,6 +19,7 @@ impl KeyHandler for Focus {
 
             Self::TextBox => match key.code {
                 KeyCode::Esc => Action::ChangeFocus(Focus::Normal),
+                KeyCode::Enter => Action::SendMessage,
                 _ => Action::ForwardToInput(key),
             },
         }

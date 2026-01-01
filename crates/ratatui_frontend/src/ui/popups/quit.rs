@@ -7,15 +7,13 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget, Wrap},
 };
 
-use crate::ui::popups::Popup;
-
-use super::{Action, KeyHandler};
+use super::{Action, KeyHandler, Popup};
 
 #[derive(Debug)]
 pub struct QuitPopup;
 
 impl KeyHandler for QuitPopup {
-    fn handle_key(&self, key: KeyEvent) -> Action {
+    fn handle_key(&mut self, key: KeyEvent) -> Action {
         match key.code {
             KeyCode::Char('y') => Action::Quit,
             KeyCode::Char('n') | KeyCode::Esc => Action::PopPopup,

@@ -15,8 +15,10 @@ pub enum Action {
     PopPopup,
     ChangeFocus(Focus),
     ForwardToInput(KeyEvent),
+    Connect(String),
+    SendMessage,
 }
 
 pub trait KeyHandler {
-    fn handle_key(&self, key: KeyEvent) -> Action;
+    fn handle_key(&mut self, key: KeyEvent) -> Action;
 }
