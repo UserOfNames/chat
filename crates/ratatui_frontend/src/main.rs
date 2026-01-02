@@ -28,6 +28,8 @@ use ui::{
         notice::{NoticeLevel, NoticePopup},
         popup_area,
     },
+    sidebar::Sidebar,
+    messages::Messages,
 };
 
 #[derive(Debug, Error)]
@@ -49,11 +51,13 @@ struct App<'a> {
     focus: Focus,
     popups: Vec<Box<dyn Popup>>,
     textbox: TextArea<'a>,
+    sidebar: Sidebar,
+    messages: Messages,
 }
 
 impl App<'_> {
     fn new(receiver: Receiver<client_event::Result>, sender: Sender<ClientCommand>) -> Self {
-        let block = Block::bordered().title("Input");
+        let block = Block::bordered().title(" Input ");
         let mut textbox = TextArea::default();
         textbox.set_block(block);
 
@@ -65,6 +69,8 @@ impl App<'_> {
             focus: Focus::Normal,
             popups: Vec::new(),
             textbox,
+            sidebar: Sidebar::new(),
+            messages: Messages::new(),
         }
     }
 
@@ -106,16 +112,16 @@ impl App<'_> {
     fn draw(&self, frame: &mut Frame) {
         let [message_part, sidebar] = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
+            .constraints(vec![Constraint::Percentage(80), Constraint::Percentage(20)])
             .areas(frame.area());
 
         let [messages, input] = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Percentage(90), Constraint::Percentage(10)])
+            .constraints(vec![Constraint::Percentage(75), Constraint::Percentage(25)])
             .areas(message_part);
 
-        frame.render_widget("sidebar", sidebar);
-        frame.render_widget("messages", messages);
+        frame.render_widget(&self.sidebar, sidebar);
+        frame.render_widget(&self.messages, messages);
         frame.render_widget(&self.textbox, input);
 
         if let Some(popup) = self.popups.last() {
