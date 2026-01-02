@@ -60,7 +60,8 @@ impl Decoder for ClientCodec {
 
         let frame = EventFrame::decode(chunk)?;
 
-        let event = NetworkEvent::try_from(frame).unwrap(); // TODO: Actual error handling
+        let event = NetworkEvent::try_from(frame)?;
+
         Ok(Some(event))
     }
 }
@@ -118,7 +119,7 @@ impl Decoder for ServerCodec {
 
         let frame = CommandFrame::decode(chunk)?;
 
-        let command = NetworkCommand::try_from(frame).unwrap(); // TODO: Actual error handling
+        let command = NetworkCommand::try_from(frame)?;
         Ok(Some(command))
     }
 }

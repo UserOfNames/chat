@@ -1,3 +1,5 @@
+use std::io;
+
 use crate::protobuf_items::{EventFrame, event_frame};
 
 #[derive(Debug, Clone)]
@@ -6,8 +8,7 @@ pub enum NetworkEvent {
 }
 
 impl TryFrom<EventFrame> for NetworkEvent {
-    // TODO: Actual error type
-    type Error = ();
+    type Error = io::Error;
 
     fn try_from(value: EventFrame) -> Result<Self, Self::Error> {
         match value.variant {
@@ -15,7 +16,7 @@ impl TryFrom<EventFrame> for NetworkEvent {
                 Ok(NetworkEvent::ReceivedMessage(message))
             }
 
-            _ => Err(()),
+            _ => Err(io::Error::from(io::ErrorKind::InvalidData)),
         }
     }
 }

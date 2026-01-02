@@ -12,7 +12,6 @@ pub enum ClientCommand {
 }
 
 impl TryFrom<ClientCommand> for NetworkCommand {
-    // TODO: Actual error
     type Error = ();
 
     fn try_from(value: ClientCommand) -> Result<Self, Self::Error> {

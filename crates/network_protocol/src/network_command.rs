@@ -1,3 +1,5 @@
+use std::io;
+
 use crate::protobuf_items::{CommandFrame, command_frame};
 
 #[derive(Debug, Clone)]
@@ -6,8 +8,7 @@ pub enum NetworkCommand {
 }
 
 impl TryFrom<CommandFrame> for NetworkCommand {
-    // TODO: Actual error type
-    type Error = ();
+    type Error = io::Error;
 
     fn try_from(value: CommandFrame) -> Result<Self, Self::Error> {
         match value.variant {
@@ -15,7 +16,7 @@ impl TryFrom<CommandFrame> for NetworkCommand {
                 Ok(NetworkCommand::SendMessage(message))
             }
 
-            _ => Err(()),
+            _ => Err(io::Error::from(io::ErrorKind::InvalidData)),
         }
     }
 }
