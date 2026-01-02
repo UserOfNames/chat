@@ -11,8 +11,7 @@ use tokio::{
 };
 use tokio_util::codec::Framed;
 
-use network_protocol::codecs::ServerCodec;
-use network_protocol::{NetworkCommand, NetworkEvent};
+use network_protocol::{ChatMessage, NetworkCommand, NetworkEvent, codecs::ServerCodec};
 
 #[derive(Debug, Parser)]
 #[command(author = "UserOfNames", version, about)]
@@ -123,7 +122,10 @@ impl Server {
         match command {
             NetworkCommand::SendMessage(msg) => self
                 .event_tx
-                .send(NetworkEvent::ReceivedMessage(msg))
+                .send(NetworkEvent::ReceivedMessage(ChatMessage {
+                    contents: msg,
+                    sender: "placeholder".to_owned(),
+                }))
                 .unwrap(), // TODO: You know the drill. Fix this later.
         };
     }

@@ -1,3 +1,5 @@
+pub use network_protocol::ChatMessage;
+
 use std::io;
 use std::result::Result as StdResult;
 
@@ -17,7 +19,7 @@ pub type Result = StdResult<ClientEvent, Error>;
 pub enum ClientEvent {
     Connected,
     Disconnected,
-    ReceivedMessage(String),
+    ReceivedMessage(ChatMessage),
 }
 
 impl From<NetworkEvent> for ClientEvent {

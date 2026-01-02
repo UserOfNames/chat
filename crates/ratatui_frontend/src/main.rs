@@ -147,9 +147,7 @@ impl App<'_> {
             }
 
             ClientEvent::ReceivedMessage(msg) => {
-                // TODO: Implement message area
-                self.notify(msg, NoticeLevel::Notification)
-                    .await
+                self.messages.add_message(msg);
             }
         }
     }

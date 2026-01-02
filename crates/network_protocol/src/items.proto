@@ -11,6 +11,11 @@ message CommandFrame {
 
 message EventFrame {
   oneof variant {
-    string received_message = 1;
+    ChatMessageFrame received_message = 1;
   }
+}
+
+message ChatMessageFrame {
+  string contents = 1;
+  string sender = 2;
 }
