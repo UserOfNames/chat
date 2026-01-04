@@ -41,7 +41,7 @@ impl KeyHandler for NoticePopup {
 impl Popup for NoticePopup {
     fn render(&self, area: Rect, buf: &mut Buffer) {
         let (border_title, border_style) = match self.level {
-            NoticeLevel::Notification => (" Notification ", Style::default().reset()),
+            NoticeLevel::Notification => (" Notification ", Style::default().green()),
             NoticeLevel::Warning => (" Warning ", Style::default().yellow()),
             NoticeLevel::Error => (" Error ", Style::default().red()),
         };

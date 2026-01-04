@@ -198,6 +198,11 @@ impl App<'_> {
             Action::SendMessage => {
                 let message = self.textbox.lines().join("");
                 self.send_to_backend(ClientCommand::SendMessage(message)).await;
+
+                let block = Block::bordered().title(" Input ");
+                let mut textbox = TextArea::default();
+                textbox.set_block(block);
+                self.textbox = textbox;
             }
         }
     }
