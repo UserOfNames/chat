@@ -1,12 +1,13 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     prelude::{Buffer, Rect},
+    style::Stylize,
     widgets::{Block, Borders, Paragraph, Widget},
 };
 
 #[derive(Debug)]
 pub struct Sidebar {
-    connected_addr: Option<String>,
+    pub connected_addr: Option<String>,
 }
 
 impl Sidebar {
@@ -33,7 +34,13 @@ impl Widget for &Sidebar {
             ])
             .areas(inner_area);
 
-        Paragraph::new("connection info").render(connection, buf);
+        let connection_text = if let Some(addr) = &self.connected_addr {
+            Paragraph::new(addr.as_str()).green()
+        } else {
+            Paragraph::new("Not connected").red()
+        };
+
+        connection_text.render(connection, buf);
 
         Paragraph::new("channel list")
             .block(Block::default().borders(Borders::TOP))

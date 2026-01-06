@@ -104,7 +104,7 @@ impl ChatBackend {
     }
 
     async fn connect(&mut self, addr: String) {
-        let connection = match Connection::connect(addr).await {
+        let connection = match Connection::connect(&addr).await {
             Ok(conn) => conn,
             Err(e) => {
                 self.send_ui_error(e.into()).await;
@@ -113,7 +113,7 @@ impl ChatBackend {
         };
 
         self.connection = Some(connection);
-        self.send_ui_event(ClientEvent::Connected).await;
+        self.send_ui_event(ClientEvent::Connected(addr)).await;
     }
 
     async fn disconnect(&mut self) {

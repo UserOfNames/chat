@@ -43,19 +43,19 @@ enum AppError {
 type AppResult = Result<(), AppError>;
 
 #[derive(Debug)]
-struct App<'a> {
+struct App {
     backend_receiver: Receiver<client_event::Result>,
     backend_sender: Sender<ClientCommand>,
     event_stream: EventStream,
     is_quitting: bool,
     focus: Focus,
     popups: Vec<Box<dyn Popup>>,
-    textbox: TextArea<'a>,
+    textbox: TextArea<'static>,
     sidebar: Sidebar,
     messages: Messages,
 }
 
-impl App<'_> {
+impl App {
     fn new(receiver: Receiver<client_event::Result>, sender: Sender<ClientCommand>) -> Self {
         let block = Block::bordered().title(" Input ");
         let mut textbox = TextArea::default();
@@ -136,9 +136,8 @@ impl App<'_> {
 
     async fn handle_client_event(&mut self, event: ClientEvent) {
         match event {
-            ClientEvent::Connected => {
-                self.notify("Connected".to_owned(), NoticeLevel::Notification)
-                    .await
+            ClientEvent::Connected(addr) => {
+                self.sidebar.connected_addr = Some(addr);
             }
 
             ClientEvent::Disconnected => {

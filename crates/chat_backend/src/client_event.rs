@@ -9,7 +9,7 @@ use network_protocol::NetworkEvent;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("I/O error {0}")]
+    #[error("I/O error: {0}")]
     Io(#[from] io::Error),
 }
 
@@ -17,7 +17,7 @@ pub type Result = StdResult<ClientEvent, Error>;
 
 #[derive(Debug)]
 pub enum ClientEvent {
-    Connected,
+    Connected(String),
     Disconnected,
     ReceivedMessage(ChatMessage),
 }
