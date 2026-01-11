@@ -2,8 +2,10 @@ use std::io;
 
 use crate::protobuf_items::{CommandFrame, command_frame};
 
+/// A command sent from the client backend to the server.
 #[derive(Debug, Clone)]
 pub enum NetworkCommand {
+    /// Send a message to all other connected clients.
     SendMessage(String),
 }
 

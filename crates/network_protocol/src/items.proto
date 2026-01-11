@@ -3,18 +3,21 @@ package network_protocol.items;
 
 import "google/protobuf/empty.proto";
 
+// Frame for network-bound commands, sent from the client backend to the server.
 message CommandFrame {
   oneof variant {
     string send_message = 1;
   }
 }
 
+// Frame for network-bound events, sent from the server to the client backend.
 message EventFrame {
   oneof variant {
     ChatMessageFrame received_message = 1;
   }
 }
 
+// Frame for a chat message.
 message ChatMessageFrame {
   string contents = 1;
   string sender = 2;

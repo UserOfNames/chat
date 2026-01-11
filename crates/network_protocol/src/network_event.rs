@@ -2,9 +2,12 @@ use std::io;
 
 use crate::protobuf_items::{ChatMessageFrame, EventFrame, event_frame};
 
+/// A message sent from a client to all other clients connected to the same server.
 #[derive(Debug, Clone)]
 pub struct ChatMessage {
+    /// The actual message.
     pub contents: String,
+    /// The sender's nickname.
     pub sender: String,
 }
 
@@ -26,8 +29,10 @@ impl From<ChatMessage> for ChatMessageFrame {
     }
 }
 
+/// An event sent from the server to the client backend.
 #[derive(Debug, Clone)]
 pub enum NetworkEvent {
+    /// Received a message from some other connected client.
     ReceivedMessage(ChatMessage),
 }
 

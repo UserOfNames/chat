@@ -1,13 +1,18 @@
 use network_protocol::NetworkCommand;
 
+/// A command from the UI to the client backend.
 #[derive(Debug)]
 pub enum ClientCommand {
-    // Local-only
+    // === Local-only ===
+    /// Connect to the server with address `String`.
     Connect(String),
+    /// Disconnect from the currently connected server. This is a NOP if not connected to a server.
     Disconnect,
+    /// Shut down the backend.
     Quit,
 
-    // Network pass-through
+    // === Passed to nework ===
+    /// Send a message to other clients connected to the server.
     SendMessage(String),
 }
 

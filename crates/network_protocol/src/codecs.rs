@@ -1,3 +1,5 @@
+//! Codecs for communication between the client backend and a server.
+
 use std::io;
 
 use prost::Message;
@@ -7,6 +9,10 @@ use tokio_util::codec::{Decoder, Encoder};
 use crate::protobuf_items::{CommandFrame, EventFrame};
 use crate::{NetworkCommand, NetworkEvent};
 
+/// A codec for a client-side `Framed` `TcpStream`. Internally, this uses protobuf with a varint
+/// length prefix.
+///
+/// This codec sends `NetworkCommand`s and receives `NetworkEvent`s.
 #[derive(Debug)]
 pub struct ClientCodec;
 
@@ -66,6 +72,10 @@ impl Decoder for ClientCodec {
     }
 }
 
+/// A codec for a client-side `Framed` `TcpStream`. Internally, this uses protobuf with a varint
+/// length prefix.
+///
+/// This codec sends `NetworkEvent`s and receives `NetworkCommand`s.
 #[derive(Debug)]
 pub struct ServerCodec;
 
