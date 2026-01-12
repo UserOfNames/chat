@@ -36,7 +36,9 @@ impl Messages {
 
         let content = format!("{}: {}", message.sender, message.contents);
         self.messages.push(ListItem::new(content));
-        self.state.borrow_mut().select(Some(self.messages.len() - 1));
+        self.state
+            .borrow_mut()
+            .select(Some(self.messages.len() - 1));
     }
 }
 

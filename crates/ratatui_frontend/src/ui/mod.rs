@@ -1,10 +1,7 @@
-pub mod focus;
-pub mod messages;
+pub mod main_panel;
 pub mod popups;
-pub mod sidebar;
 
 use crossterm::event::KeyEvent;
-use focus::Focus;
 use popups::Popup;
 
 #[derive(Debug)]
@@ -13,10 +10,8 @@ pub enum Action {
     Quit,
     PushPopup(Box<dyn Popup>),
     PopPopup,
-    ChangeFocus(Focus),
-    ForwardToInput(KeyEvent),
     Connect(String),
-    SendMessage,
+    SendMessage(String),
 }
 
 pub trait KeyHandler {
