@@ -202,8 +202,8 @@ impl App {
 
     /// Create a notification, warning, or error popup.
     async fn notify(&mut self, message: String, level: NoticeLevel) {
-        let notice = NoticePopup::new(message, level);
-        self.popups.push(Box::new(notice));
+        let notice = NoticePopup::create(message, level);
+        self.popups.push(notice);
     }
 
     /// Request a clean exit.

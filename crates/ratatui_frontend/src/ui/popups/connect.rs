@@ -2,14 +2,22 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    widgets::Widget,
+    widgets::{Block, Widget},
 };
 use tui_textarea::TextArea;
 
 use super::{Action, KeyHandler, Popup};
 
 #[derive(Debug)]
-pub struct ConnectPopup(pub TextArea<'static>);
+pub struct ConnectPopup(TextArea<'static>);
+
+impl ConnectPopup {
+    pub fn create() -> Box<dyn Popup> {
+        let mut ta = TextArea::default();
+        ta.set_block(Block::bordered());
+        Box::new(Self(ta))
+    }
+}
 
 impl KeyHandler for ConnectPopup {
     fn handle_key(&mut self, key: KeyEvent) -> Action {

@@ -12,6 +12,12 @@ use super::{Action, KeyHandler, Popup};
 #[derive(Debug)]
 pub struct QuitPopup;
 
+impl QuitPopup {
+    pub fn create() -> Box<dyn Popup> {
+        Box::new(Self)
+    }
+}
+
 impl KeyHandler for QuitPopup {
     fn handle_key(&mut self, key: KeyEvent) -> Action {
         match key.code {

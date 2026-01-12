@@ -75,7 +75,7 @@ impl KeyHandler for MainPanel {
                     Action::None
                 }
 
-                KeyCode::Esc => Action::PushPopup(Box::new(CommandsPopup)),
+                KeyCode::Esc => Action::PushPopup(CommandsPopup::create()),
                 _ => Action::None,
             },
 

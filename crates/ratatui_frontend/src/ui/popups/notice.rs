@@ -23,8 +23,8 @@ pub struct NoticePopup {
 }
 
 impl NoticePopup {
-    pub fn new(message: String, level: NoticeLevel) -> Self {
-        Self { message, level }
+    pub fn create(message: String, level: NoticeLevel) -> Box<dyn Popup> {
+        Box::new(Self { message, level })
     }
 }
 
