@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget, Wrap},
 };
 
-use super::{Action, KeyHandler, Popup};
+use super::{Action, KeyHandler, Popup, SizeHint};
 
 #[derive(Debug)]
 pub struct QuitPopup;
@@ -39,9 +39,9 @@ impl Popup for QuitPopup {
             Line::from("Are you sure you want to quit?").centered(),
             Line::from(""),
             Line::from(vec![
-                Span::styled("   (y) ", Style::default().bold().blue()),
+                Span::styled("   (y) ", Style::default().blue()),
                 Span::raw("Yes"),
-                Span::styled("   (n) ", Style::default().bold().blue()),
+                Span::styled("   (n) ", Style::default().blue()),
                 Span::raw("No"),
             ])
             .centered(),
@@ -57,7 +57,7 @@ impl Popup for QuitPopup {
             .render(area, buf);
     }
 
-    fn hint_size(&self) -> (u16, u16) {
-        (30, 20)
+    fn hint_size(&self) -> SizeHint {
+        SizeHint::Percentage(30, 20)
     }
 }

@@ -6,7 +6,7 @@ use ratatui::{
 };
 use tui_textarea::TextArea;
 
-use super::{Action, KeyHandler, Popup};
+use super::{Action, KeyHandler, Popup, SizeHint};
 
 #[derive(Debug)]
 pub struct ConnectPopup(TextArea<'static>);
@@ -42,7 +42,7 @@ impl Popup for ConnectPopup {
         self.0.render(area, buf);
     }
 
-    fn hint_size(&self) -> (u16, u16) {
-        (70, 10)
+    fn hint_size(&self) -> SizeHint {
+        SizeHint::Percentage(70, 10)
     }
 }

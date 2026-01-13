@@ -28,6 +28,8 @@ use ui::{
     },
 };
 
+use crate::ui::popups::SizeHint;
+
 #[derive(Debug, Error)]
 enum AppError {
     #[error("I/O error: {0}")]
@@ -121,9 +123,7 @@ impl App {
 
         // Since popups are a stack, we only render the 'top' one.
         if let Some(popup) = self.popups.last() {
-            let (x_percent, y_percent) = popup.hint_size();
-
-            let area = popup_area(frame.area(), x_percent, y_percent);
+            let area = popup_area(frame.area(), popup.hint_size());
 
             frame.render_widget(Clear, area);
             popup.render(area, frame.buffer_mut());
