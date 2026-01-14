@@ -7,7 +7,9 @@ use ratatui::{
     widgets::{Block, Cell, Row, Table, Widget},
 };
 
-use super::{Action, KeyHandler, Popup, SizeHint, connect::ConnectPopup, quit::QuitPopup};
+use super::{
+    Action, KeyHandler, Popup, SizeHint, SizeKind, connect::ConnectPopup, quit::QuitPopup,
+};
 
 const HEADER_STRS: [&str; 2] = ["Key", "Action"];
 
@@ -93,6 +95,6 @@ impl Popup for CommandsPopup {
         // + 3 for borders and headers
         let height = (ROW_STRS.len() + 3) as u16;
 
-        SizeHint::Exact(width, height)
+        (SizeKind::Exact(width), SizeKind::Exact(height))
     }
 }

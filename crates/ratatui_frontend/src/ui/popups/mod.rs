@@ -10,10 +10,12 @@ use ratatui::{
 
 use super::{Action, KeyHandler};
 
-pub enum SizeHint {
-    Percentage(u16, u16),
-    Exact(u16, u16),
+pub enum SizeKind {
+    Percentage(u16),
+    Exact(u16),
 }
+
+pub type SizeHint = (SizeKind, SizeKind);
 
 pub trait Popup: KeyHandler + std::fmt::Debug {
     fn render(&self, area: Rect, buf: &mut Buffer);
@@ -22,9 +24,16 @@ pub trait Popup: KeyHandler + std::fmt::Debug {
 
 // https://ratatui.rs/examples/apps/popup/
 pub fn popup_area(area: Rect, size: SizeHint) -> Rect {
-    let (x_constraint, y_constraint) = match size {
-        SizeHint::Percentage(x, y) => (Constraint::Percentage(x), Constraint::Percentage(y)),
-        SizeHint::Exact(x, y) => (Constraint::Length(x), Constraint::Length(y)),
+    let (x, y) = size;
+
+    let x_constraint = match x {
+        SizeKind::Percentage(x) => Constraint::Percentage(x),
+        SizeKind::Exact(x) => Constraint::Length(x),
+    };
+
+    let y_constraint = match y {
+        SizeKind::Percentage(y) => Constraint::Percentage(y),
+        SizeKind::Exact(y) => Constraint::Length(y),
     };
 
     let vertical = Layout::vertical([y_constraint]).flex(Flex::Center);

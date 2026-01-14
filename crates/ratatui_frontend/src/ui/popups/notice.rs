@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget, Wrap},
 };
 
-use super::{Action, KeyHandler, Popup, SizeHint};
+use super::{Action, KeyHandler, Popup, SizeHint, SizeKind};
 
 #[derive(Debug)]
 pub enum NoticeLevel {
@@ -61,6 +61,6 @@ impl Popup for NoticePopup {
     }
 
     fn hint_size(&self) -> SizeHint {
-        SizeHint::Percentage(60, 40) // TODO: Dynamic sizing
+        (SizeKind::Percentage(60), SizeKind::Percentage(40)) // TODO: Dynamic sizing
     }
 }
