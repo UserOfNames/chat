@@ -4,10 +4,7 @@ use std::io;
 
 use crossterm::event::{Event, EventStream, KeyEvent, KeyEventKind};
 use futures::StreamExt;
-use ratatui::{
-    DefaultTerminal, Frame,
-    widgets::Clear,
-};
+use ratatui::{DefaultTerminal, Frame, widgets::Clear};
 use thiserror::Error;
 use tokio::{
     sync::mpsc::{Receiver, Sender},
@@ -160,7 +157,8 @@ impl App {
         // On some platforms (such as Windows), key releases are tracked separately from presses.
         // To prevent double-responses to a single press, we only respond to the initial press.
         if let Event::Key(k) = event
-            && k.kind == KeyEventKind::Press // Check press vs. release
+            && k.kind == KeyEventKind::Press
+        // Check press vs. release
         {
             self.handle_key_event(k).await;
         }

@@ -10,13 +10,18 @@ needless_pass_by_value = "allow"
 new_without_default = "allow"
 
 [workspace.dependencies]
+anyhow = "1"
 bytes = "1"
 clap = { version = "4", features = ["derive"] }
+directories = "6"
+figment = { version = "0.10", features = ["env", "toml"] }
 futures = "0.3"
 prost = "0.14"
+serde = { version = "1", features = ["derive"] }
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec"] }
+toml = "0.9"
 
 chat_backend = { path = "./crates/chat_backend/" }
 network_protocol = { path = "./crates/network_protocol/" }

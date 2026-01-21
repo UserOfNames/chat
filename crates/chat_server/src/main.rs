@@ -1,144 +1,75 @@
-use std::{io, net::SocketAddr};
+mod init;
+mod run;
 
-use clap::Parser;
-use futures::{SinkExt, StreamExt};
-use tokio::{
-    net::{TcpListener, TcpStream},
-    sync::{
-        broadcast::{self, error::RecvError},
-        mpsc::{self, error::SendError},
-    },
-};
-use tokio_util::codec::Framed;
+use std::path::{Path, PathBuf};
 
-use network_protocol::{ChatMessage, NetworkCommand, NetworkEvent, codecs::ServerCodec};
+use clap::{Parser, Subcommand};
+use directories::ProjectDirs;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Parser)]
+static ENV_VAR_PREFIX: &str = "MY_CHAT_";
+static CONFIG_FILE_NAME: &str = "config.toml";
+
+#[allow(clippy::option_option)]
+#[derive(Debug, Parser, Serialize, Deserialize)]
 #[command(author = "UserOfNames", version, about)]
-struct Args {
-    /// The address the TCP listener binds to for accepting new client connections.
-    listener_addr: String,
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
 }
 
-#[derive(Debug)]
-struct Connection {
-    stream: Framed<TcpStream, ServerCodec>,
-    cmd_tx: mpsc::Sender<NetworkCommand>,
-    event_rx: broadcast::Receiver<NetworkEvent>,
+#[derive(Debug, Subcommand, Serialize, Deserialize)]
+enum Commands {
+    /// Initialize essential state for the server
+    #[command(subcommand)]
+    Init(InitMode),
+
+    /// Start the server
+    Run(run::RunArgs),
 }
 
-// TODO: Clean up error models on all these methods. It seems unlikely that many of these are
-// actually recoverable or that returning them is appropriate.
-impl Connection {
-    fn new(
-        stream: TcpStream,
-        cmd_tx: mpsc::Sender<NetworkCommand>,
-        event_rx: broadcast::Receiver<NetworkEvent>,
-    ) -> Self {
-        let framed_stream = Framed::new(stream, ServerCodec);
+#[derive(Debug, Subcommand, Serialize, Deserialize)]
+enum InitMode {
+    /// Initialize a default config file
+    Config(init::ConfigArgs),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Config {
+    listener_ip: String,
+    listener_port: u16,
+}
+
+impl Default for Config {
+    fn default() -> Self {
         Self {
-            stream: framed_stream,
-            cmd_tx,
-            event_rx,
+            listener_ip: String::from("localhost"),
+            listener_port: 12345,
         }
-    }
-
-    async fn send_command(
-        &mut self,
-        command: NetworkCommand,
-    ) -> Result<(), SendError<NetworkCommand>> {
-        self.cmd_tx.send(command).await
-    }
-
-    async fn send_event(&mut self, event: NetworkEvent) -> io::Result<()> {
-        self.stream.send(event).await
-    }
-
-    async fn activate(mut self) {
-        loop {
-            // TODO: This is obviously abysmal. Fix this alongside the other error model touchups.
-            tokio::select! {
-                command = self.stream.next() => self.send_command(command.unwrap().unwrap()).await.unwrap(),
-                event = self.event_rx.recv() => self.send_event(event.unwrap()).await.unwrap(),
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-struct Server {
-    listener: TcpListener,
-    cmd_rx: mpsc::Receiver<NetworkCommand>,
-    master_cmd_tx: mpsc::Sender<NetworkCommand>,
-    event_tx: broadcast::Sender<NetworkEvent>,
-}
-
-impl Server {
-    fn new(listener: TcpListener) -> Self {
-        let (cmd_tx, cmd_rx) = mpsc::channel(128); // TODO: Buffer size
-        let (event_tx, _) = broadcast::channel(128); // TODO: Buffer size
-
-        Self {
-            listener,
-            cmd_rx,
-            master_cmd_tx: cmd_tx,
-            event_tx,
-        }
-    }
-
-    async fn run(mut self) {
-        loop {
-            tokio::select! {
-                conn = self.listener.accept() => match conn {
-                    Ok((stream, addr)) => self.handle_new_connection(stream, addr),
-                    Err(e) => todo!("Log errors"),
-                },
-
-                command = self.cmd_rx.recv() => {
-                    // Because we hold a master copy of the Sender inside of self, recv() can
-                    // never return None. If it does, it's because self was dropped somehow, so
-                    // we should break anyways.
-                    let Some(command) = command else {
-                        break;
-                    };
-
-                    self.handle_command(command);
-                }
-            }
-        }
-    }
-
-    fn handle_new_connection(&mut self, stream: TcpStream, addr: SocketAddr) {
-        let _ = addr; // For now, we just discard the address. We may do something with it later.
-
-        let cmd_tx = self.master_cmd_tx.clone();
-        let event_rx = self.event_tx.subscribe();
-
-        let connection = Connection::new(stream, cmd_tx, event_rx);
-        tokio::spawn(connection.activate());
-    }
-
-    fn handle_command(&mut self, command: NetworkCommand) {
-        match command {
-            NetworkCommand::SendMessage(msg) => self
-                .event_tx
-                .send(NetworkEvent::ReceivedMessage(ChatMessage {
-                    contents: msg,
-                    sender: "placeholder".to_owned(),
-                }))
-                .unwrap(), // TODO: You know the drill. Fix this later.
-        };
     }
 }
 
 #[tokio::main]
-async fn main() -> io::Result<()> {
-    let args = Args::parse();
+async fn main() -> anyhow::Result<()> {
+    let global_args = Cli::parse();
 
-    let listener = TcpListener::bind(&args.listener_addr).await?;
+    match global_args.command {
+        Commands::Run(args) => run::main(args),
+        Commands::Init(mode) => init::main(mode),
+    }
+}
 
-    let server = Server::new(listener);
-    server.run().await;
+// TODO: Relocate this?
+fn get_project_dirs() -> Option<ProjectDirs> {
+    ProjectDirs::from("rs", "UserOfNames", "my_chat")
+}
 
-    Ok(())
+// TODO: Relocate this?
+fn get_config_path(project_dirs: Option<&ProjectDirs>, other: &[Option<&Path>]) -> Option<PathBuf> {
+    other
+        .iter()
+        .flatten()
+        .next()
+        .map(|&x| x.to_owned())
+        .or_else(|| project_dirs.map(|dirs| dirs.config_dir().join(CONFIG_FILE_NAME)))
 }
