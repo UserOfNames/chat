@@ -1,3 +1,5 @@
+mod connection;
+
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -8,7 +10,9 @@ use figment::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{Config, ENV_VAR_PREFIX, get_config_path, get_project_dirs};
+use crate::{CONFIG_FILE_NAME, Config, ENV_VAR_PREFIX, first_match, get_project_dirs};
+
+use connection::Connection;
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct RunArgs {
@@ -22,17 +26,32 @@ pub struct RunArgs {
     config_file: Option<PathBuf>,
 }
 
-pub fn main(args: RunArgs) -> anyhow::Result<()> {
+#[derive(Debug)]
+struct ChatServer {
+    config: Config,
+}
+
+impl ChatServer {
+    fn new(config: Config) -> Self {
+        Self { config }
+    }
+
+    async fn run(mut self) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+pub async fn main(args: RunArgs) -> anyhow::Result<()> {
     let project_dirs = get_project_dirs();
-    let args_conf_path = args.config_file.as_deref();
     let env_conf_path = std::env::var(format!("{ENV_VAR_PREFIX}CONFIG_FILE"))
         .ok()
         .map(PathBuf::from);
 
-    let config_path = get_config_path(
-        project_dirs.as_ref(),
-        &[args_conf_path, env_conf_path.as_deref()],
-    );
+    let config_path = first_match! {
+        Some(path) = &args.config_file => path.clone(),
+        Some(path) = env_conf_path => path,
+        Some(pd) = project_dirs => pd.config_dir().join(CONFIG_FILE_NAME),
+    };
 
     let base_config = Config::default();
 
@@ -48,5 +67,5 @@ pub fn main(args: RunArgs) -> anyhow::Result<()> {
         .extract()
         .context("Resolving configuration")?;
 
-    Ok(())
+    ChatServer::new(config).run().await
 }

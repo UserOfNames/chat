@@ -9,8 +9,11 @@ clap = { workspace = true }
 figment = { workspace = true }
 futures = { workspace = true }
 directories = { workspace = true }
+rcgen = { workspace = true }
+rustls = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
+tokio-rustls = { workspace = true }
 tokio-util = { workspace = true }
 toml = { workspace = true }
 
