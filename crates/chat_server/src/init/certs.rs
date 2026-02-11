@@ -1,6 +1,9 @@
 use std::fs::{File, create_dir_all};
 use std::io::{self, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 
 use anyhow::{Context, bail};
 use clap::Args;
@@ -16,7 +19,7 @@ pub struct InitCertsArgs {
     output_path: Option<PathBuf>,
 
     /// Subject Alternative Names (domains/IPs). Defaults to "localhost" if empty
-    #[arg(short, long)]
+    #[arg(short, long, default_values = ["localhost"])]
     domains: Vec<String>,
 
     /// Overwrite existing files in the target directory
@@ -52,7 +55,9 @@ pub fn init_certs(args: InitCertsArgs) -> anyhow::Result<()> {
     let key_path = output_dir.join(&args.key_name);
 
     if args.dry_run {
-        println!("{}", output_dir.display());
+        println!("Output directory: '{}'", output_dir.display());
+        println!("Certificate file: '{}'", cert_path.display());
+        println!("Key file: '{}'", key_path.display());
         return Ok(());
     }
 
@@ -62,39 +67,47 @@ pub fn init_certs(args: InitCertsArgs) -> anyhow::Result<()> {
     let CertifiedKey { cert, signing_key } =
         generate_simple_self_signed(subject_alt_names).context("Generating certificates")?;
 
-    let targets = [
-        (cert_path, cert.pem()),
-        (key_path, signing_key.serialize_pem()),
-    ];
+    write_file(&cert_path, cert.pem(), 0o644, args.force).context("Writing certificate file")?;
+    println!("Initialized certificate at path '{}'", &cert_path.display());
 
-    for (path, contents) in targets {
-        let file = if args.force {
-            File::create(&path)
-        } else {
-            File::create_new(&path)
-        };
-
-        let mut file = match file {
-            Ok(file) => file,
-
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => bail!(
-                "File already exists at path '{}'. Use --force to overwrite it.",
-                path.display()
-            ),
-
-            Err(e) => {
-                return Err(e)
-                    .with_context(|| format!("Initializing file at path '{}'", path.display()));
-            }
-        };
-
-        file.write_all(contents.as_bytes())
-            .context("Writing default config file")?;
-
-        println!("Initialized file at path '{}'", path.display());
-    }
+    write_file(&key_path, signing_key.serialize_pem(), 0o400, args.force)
+        .context("Writing key file")?;
+    println!("Initialized key file at path '{}'", &cert_path.display());
 
     println!("Generation complete.");
+
+    #[cfg(not(unix))]
+    println!("WARNING: Default file permissions on non-unix platforms may not be secure.");
+
+    Ok(())
+}
+
+fn write_file(path: &Path, contents: String, mode: u32, force: bool) -> anyhow::Result<()> {
+    let mut file = File::options();
+    file.write(true)
+        .create(true)
+        .truncate(true)
+        .create_new(!force); // Ignores create() and truncate() if set
+
+    #[cfg(unix)]
+    file.mode(mode);
+
+    let mut file = match file.open(path) {
+        Ok(file) => file,
+
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => bail!(
+            "File already exists at path '{}'. Use --force to overwrite it.",
+            path.display()
+        ),
+
+        Err(e) => {
+            return Err(e)
+                .with_context(|| format!("Initializing file at path '{}'", path.display()));
+        }
+    };
+
+    file.write_all(contents.as_bytes())
+        .context("Writing default config file")?;
 
     Ok(())
 }

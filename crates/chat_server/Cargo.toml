@@ -17,6 +17,8 @@ tokio-rustls = { workspace = true }
 tokio-util = { workspace = true }
 toml = { workspace = true }
 
+zeroize = "1"
+
 network_protocol = { workspace = true }
 
 [lints]
