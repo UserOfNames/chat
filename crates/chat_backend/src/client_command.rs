@@ -5,7 +5,7 @@ use network_protocol::NetworkCommand;
 pub enum ClientCommand {
     // === Local-only ===
     /// Connect to the server with address `String`.
-    Connect(String),
+    Connect(String, Option<u16>),
     /// Disconnect from the currently connected server. This is a NOP if not connected to a server.
     Disconnect,
     /// Shut down the backend.

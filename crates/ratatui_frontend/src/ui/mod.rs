@@ -10,7 +10,7 @@ pub enum Action {
     Quit,
     PushPopup(Box<dyn Popup>),
     PopPopup,
-    Connect(String),
+    Connect(String, Option<u16>),
     SendMessage(String),
 }
 

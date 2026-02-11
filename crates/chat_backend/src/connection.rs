@@ -1,8 +1,10 @@
 use std::io;
 
 use futures::{SinkExt, StreamExt};
+use rustls::pki_types::ServerName;
 use tokio::io::AsyncWriteExt;
-use tokio::net::{TcpStream, ToSocketAddrs};
+use tokio::net::TcpStream;
+use tokio_rustls::{TlsConnector, client::TlsStream};
 use tokio_util::codec::Framed;
 
 use network_protocol::codecs::ClientCodec;
@@ -11,21 +13,35 @@ use network_protocol::{NetworkCommand, NetworkEvent};
 /// A connection to a chat server.
 #[derive(Debug)]
 pub struct Connection {
-    stream: Framed<TcpStream, ClientCodec>,
+    stream: Framed<TlsStream<TcpStream>, ClientCodec>,
 }
 
 impl Connection {
-    /// Create a new `Connection` to the server at `addr`.
+    /// Create a new `Connection` to the server at `host:port`.
+    ///
+    /// If no port is provided, the [default port](network_protocol::DEFAULT_LISTENER_PORT) is used.
     ///
     /// Returns an error if the connection failed for any reason (invalid address, connection
     /// refused, etc.).
-    pub async fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
-        let socket = TcpStream::connect(addr).await?;
-        let framed_socket = Framed::new(socket, ClientCodec);
+    pub async fn connect(
+        host: &str,
+        port: Option<u16>,
+        tls_connector: &TlsConnector,
+    ) -> io::Result<Self> {
+        let port = port.unwrap_or(network_protocol::DEFAULT_LISTENER_PORT);
 
-        Ok(Self {
-            stream: framed_socket,
-        })
+        let domain = ServerName::try_from(host.to_owned()).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Invalid TLS host: {e}"),
+            )
+        })?;
+
+        let stream = TcpStream::connect((host, port)).await?;
+        let stream = tls_connector.connect(domain, stream).await?;
+        let stream = Framed::new(stream, ClientCodec);
+
+        Ok(Self { stream })
     }
 
     /// Consume the `Connection` and attempt a clean disconnect.

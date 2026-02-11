@@ -4,13 +4,16 @@ mod connection;
 
 use std::io;
 use std::ops::ControlFlow;
+use std::sync::Arc;
 
-use network_protocol::{NetworkCommand, NetworkEvent};
+use rustls::{RootCertStore, pki_types::pem::PemObject};
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use client_command::ClientCommand;
 use client_event::ClientEvent;
 use connection::Connection;
+use network_protocol::{NetworkCommand, NetworkEvent};
+use tokio_rustls::TlsConnector;
 
 /// Contains channels through which to send `ClientCommand`s to the backend and from which to
 /// receive `ClientEvent`s.
@@ -27,8 +30,8 @@ pub struct BackendHandle {
 ///
 /// To use the backend, first create it with `ChatBackend::new()`. Then, call the `run()` method.
 /// For more information, see the documentation for those respective functions.
-#[derive(Debug)]
 pub struct ChatBackend {
+    tls_connector: TlsConnector,
     connection: Option<Connection>,
     cmd_rx: Receiver<ClientCommand>,
     event_tx: Sender<client_event::Result>,
@@ -42,15 +45,32 @@ impl ChatBackend {
         let (cmd_tx, cmd_rx) = mpsc::channel::<ClientCommand>(128); // TODO: Buffer size
         let (event_tx, event_rx) = mpsc::channel::<client_event::Result>(128); // TODO: Buffer size
 
-        let controller = BackendHandle { cmd_tx, event_rx };
+        let handle = BackendHandle { cmd_tx, event_rx };
+
+        let mut root_cert_store = RootCertStore::empty();
+
+        root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.to_vec());
+
+        let x = rustls::pki_types::CertificateDer::from_pem_file(
+            "/home/zdbg/.local/share/my_chat/tls/ca/certificate.pem",
+        )
+        .unwrap();
+        root_cert_store.add(x).unwrap();
+
+        let tls_config = rustls::ClientConfig::builder()
+            .with_root_certificates(root_cert_store)
+            .with_no_client_auth();
+
+        let tls_connector = TlsConnector::from(Arc::new(tls_config));
 
         let backend = Self {
+            tls_connector,
             connection: None,
             cmd_rx,
             event_tx,
         };
 
-        (backend, controller)
+        (backend, handle)
     }
 
     /// Start the backend.
@@ -105,7 +125,7 @@ impl ChatBackend {
         #[expect(clippy::match_wildcard_for_single_variants)]
         match command {
             // "Special case" arms.
-            ClientCommand::Connect(addr) => self.connect(addr).await,
+            ClientCommand::Connect(host, port) => self.connect(host, port).await,
             ClientCommand::Disconnect => self.disconnect().await,
             ClientCommand::Quit => return ControlFlow::Break(()),
 
@@ -117,7 +137,7 @@ impl ChatBackend {
             // it.
             _ => {
                 let command = NetworkCommand::try_from(command)
-                    .expect("Improper conversion from ClientCommand to NetworkCommand. You did not handle a special case.");
+                    .expect("Improper conversion from ClientCommand to NetworkCommand. The developers did not handle a special case.");
                 self.send_network_command(command).await;
             }
         }
@@ -132,10 +152,10 @@ impl ChatBackend {
         }
     }
 
-    /// Attempt to connect to the server at `addr`. The UI will be notified about whether the
+    /// Attempt to connect to the server at `host:port`. The UI will be notified about whether the
     /// connection is successful or not.
-    async fn connect(&mut self, addr: String) {
-        let connection = match Connection::connect(&addr).await {
+    async fn connect(&mut self, host: String, port: Option<u16>) {
+        let connection = match Connection::connect(&host, port, &self.tls_connector).await {
             Ok(conn) => conn,
             Err(e) => {
                 self.send_ui_error(e.into()).await;
@@ -144,7 +164,7 @@ impl ChatBackend {
         };
 
         self.connection = Some(connection);
-        self.send_ui_event(ClientEvent::Connected(addr)).await;
+        self.send_ui_event(ClientEvent::Connected(host)).await;
     }
 
     /// Disconnect from the server.
@@ -158,7 +178,7 @@ impl ChatBackend {
             // TODO: Log error
         }
 
-        // Even if the disconnected was not clean, by now, the connection has been consumed and
+        // Even if the disconnect was not clean, by now, the connection has been consumed and
         // closed. As such, we unconditionally report success and only internally log the possible
         // error.
         self.send_ui_event(ClientEvent::Disconnected).await;

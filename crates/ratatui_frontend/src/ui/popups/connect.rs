@@ -1,3 +1,4 @@
+// TODO: Add port field
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
@@ -26,8 +27,8 @@ impl KeyHandler for ConnectPopup {
             KeyCode::Esc => Action::PopPopup,
 
             KeyCode::Enter => {
-                let addr = self.0.lines().join("");
-                Action::Connect(addr)
+                let host = self.0.lines().join("");
+                Action::Connect(host, None) // TODO: remove hardcoding
             }
 
             _ => {

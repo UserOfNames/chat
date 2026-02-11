@@ -1,3 +1,6 @@
+/// Default port the server listens to for new connections.
+pub const DEFAULT_LISTENER_PORT: u16 = 12345;
+
 mod protobuf_items {
     include!(concat!(env!("OUT_DIR"), "/network_protocol.items.rs"));
 }

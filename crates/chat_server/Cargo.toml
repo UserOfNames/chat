@@ -12,10 +12,13 @@ directories = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-rustls = { workspace = true }
 tokio-util = { workspace = true }
 toml = { workspace = true }
+
+zeroize = "1"
 
 network_protocol = { workspace = true }
 

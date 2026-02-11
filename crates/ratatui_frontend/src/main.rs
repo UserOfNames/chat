@@ -187,8 +187,8 @@ impl App {
                 self.popups.pop();
             }
 
-            Action::Connect(addr) => {
-                self.send_to_backend(ClientCommand::Connect(addr)).await;
+            Action::Connect(host, port) => {
+                self.send_to_backend(ClientCommand::Connect(host, port)).await;
                 self.popups.clear();
             }
 

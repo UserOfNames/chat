@@ -212,9 +212,12 @@ version = "0.1.0"
 dependencies = [
  "futures",
  "network_protocol",
+ "rustls",
  "thiserror",
  "tokio",
+ "tokio-rustls",
  "tokio-util",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -230,10 +233,12 @@ dependencies = [
  "rcgen",
  "rustls",
  "serde",
+ "tempfile",
  "tokio",
  "tokio-rustls",
  "tokio-util",
  "toml 0.9.11+spec-1.1.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -1732,6 +1737,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0562428422c63773dad2c345a1882263bbf4d65cf3f42e90921f787ef5ad58e7"
 dependencies = [
  "wit-bindgen",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52f5ee44c96cf55f1b349600768e3ece3a8f26010c05265ab73f945bb1a2eb9d"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]
