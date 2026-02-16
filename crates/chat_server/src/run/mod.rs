@@ -1,6 +1,9 @@
 mod connection;
 
-use std::path::PathBuf;
+use std::{
+    net::{IpAddr, SocketAddr},
+    path::PathBuf,
+};
 
 use anyhow::Context;
 use clap::Args;
@@ -8,9 +11,10 @@ use figment::{
     Figment,
     providers::{Env, Format, Serialized, Toml},
 };
+use rustls::pki_types::{CertificateDer, pem::PemObject};
 use serde::{Deserialize, Serialize};
 
-use crate::{CONFIG_FILE_NAME, Config, ENV_VAR_PREFIX, first_match, get_project_dirs};
+use crate::{CONFIG_FILE_NAME, Config, ENV_VAR_PREFIX, first_match, utils::get_project_dirs};
 
 use connection::Connection;
 
@@ -19,7 +23,12 @@ pub struct RunArgs {
     /// The address the TCP listener binds to
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
-    listener_address: Option<String>,
+    listener_ip: Option<IpAddr>,
+
+    /// The port the TCP listener binds to
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    listener_port: Option<u16>,
 
     /// Path to the TOML config file for the server.
     #[arg(long, value_name = "PATH", global = true)]
@@ -33,10 +42,18 @@ struct ChatServer {
 
 impl ChatServer {
     fn new(config: Config) -> Self {
+        let address = SocketAddr::new(config.listener_ip, config.listener_port);
+
+        // let certs = CertificateDer::pem_file_iter(file_name);
+
         Self { config }
     }
 
     async fn run(mut self) -> anyhow::Result<()> {
+        loop {
+            break;
+        }
+
         Ok(())
     }
 }

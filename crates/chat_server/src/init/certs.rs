@@ -10,7 +10,7 @@ use clap::Args;
 use rcgen::{CertifiedKey, generate_simple_self_signed};
 use serde::{Deserialize, Serialize};
 
-use crate::{first_match, get_project_dirs};
+use crate::{first_match, utils::get_project_dirs};
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct InitCertsArgs {

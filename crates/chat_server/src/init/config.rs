@@ -6,7 +6,7 @@ use anyhow::{Context, bail};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 
-use crate::{CONFIG_FILE_NAME, Config, first_match, get_project_dirs};
+use crate::{CONFIG_FILE_NAME, Config, first_match, utils::get_project_dirs};
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct InitConfigArgs {

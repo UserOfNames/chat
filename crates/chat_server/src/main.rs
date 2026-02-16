@@ -2,8 +2,9 @@ mod init;
 mod run;
 mod utils;
 
+use std::{net::{IpAddr, Ipv4Addr}, path::PathBuf};
+
 use clap::{Parser, Subcommand};
-use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 
 use init::InitMode;
@@ -32,14 +33,16 @@ enum Commands {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
-    listener_ip: String,
+    cert_path: PathBuf,
+    listener_ip: IpAddr,
     listener_port: u16,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            listener_ip: String::from("localhost"),
+            cert_path: PathBuf::default(),
+            listener_ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
             listener_port: 12345,
         }
     }
@@ -53,9 +56,4 @@ async fn main() -> anyhow::Result<()> {
         Commands::Run(args) => run::main(args).await,
         Commands::Init(mode) => init::main(mode),
     }
-}
-
-// TODO: Relocate this?
-fn get_project_dirs() -> Option<ProjectDirs> {
-    ProjectDirs::from("rs", "UserOfNames", "my_chat")
 }
