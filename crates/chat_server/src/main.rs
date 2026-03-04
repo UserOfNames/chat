@@ -12,6 +12,7 @@ use run::RunArgs;
 
 static ENV_VAR_PREFIX: &str = "MY_CHAT_";
 static CONFIG_FILE_NAME: &str = "config.toml";
+static DEFAULT_CONFIG: &str = include_str!("../data/config.toml");
 
 #[allow(clippy::option_option)]
 #[derive(Debug, Parser, Serialize, Deserialize)]
@@ -36,16 +37,6 @@ struct Config {
     cert_path: PathBuf,
     listener_ip: IpAddr,
     listener_port: u16,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            cert_path: PathBuf::default(),
-            listener_ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
-            listener_port: 12345,
-        }
-    }
 }
 
 #[tokio::main]

@@ -14,7 +14,9 @@ use figment::{
 use rustls::pki_types::{CertificateDer, pem::PemObject};
 use serde::{Deserialize, Serialize};
 
-use crate::{CONFIG_FILE_NAME, Config, ENV_VAR_PREFIX, first_match, utils::get_project_dirs};
+use crate::{
+    CONFIG_FILE_NAME, Config, DEFAULT_CONFIG, ENV_VAR_PREFIX, first_match, utils::get_project_dirs,
+};
 
 use connection::Connection;
 
@@ -41,12 +43,15 @@ struct ChatServer {
 }
 
 impl ChatServer {
-    fn new(config: Config) -> Self {
+    fn new(config: Config) -> anyhow::Result<Self> {
         let address = SocketAddr::new(config.listener_ip, config.listener_port);
 
-        // let certs = CertificateDer::pem_file_iter(file_name);
+        let certs = CertificateDer::pem_file_iter(&config.cert_path)
+            .context("ay")?
+            .collect::<Result<Vec<_>, _>>()
+            .context("uh")?;
 
-        Self { config }
+        Ok(Self { config })
     }
 
     async fn run(mut self) -> anyhow::Result<()> {
@@ -67,15 +72,17 @@ pub async fn main(args: RunArgs) -> anyhow::Result<()> {
     let config_path = first_match! {
         Some(path) = &args.config_file => path.clone(),
         Some(path) = env_conf_path => path,
-        Some(pd) = project_dirs => pd.config_dir().join(CONFIG_FILE_NAME),
+        Some(pd) = &project_dirs => pd.config_dir().join(CONFIG_FILE_NAME),
     };
 
-    let base_config = Config::default();
-
-    let mut figment = Figment::new().merge(Serialized::defaults(base_config));
+    let mut figment = Figment::new().merge(Toml::string(DEFAULT_CONFIG));
 
     if let Some(path) = config_path {
         figment = figment.merge(Toml::file(path));
+    }
+
+    if let Some(pd) = &project_dirs {
+        figment = figment.merge(Serialized::default("cert_path", pd.data_dir()));
     }
 
     let config: Config = figment
@@ -84,5 +91,5 @@ pub async fn main(args: RunArgs) -> anyhow::Result<()> {
         .extract()
         .context("Resolving configuration")?;
 
-    ChatServer::new(config).run().await
+    ChatServer::new(config)?.run().await
 }

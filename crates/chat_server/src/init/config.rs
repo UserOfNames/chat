@@ -6,7 +6,7 @@ use anyhow::{Context, bail};
 use clap::Args;
 use serde::{Deserialize, Serialize};
 
-use crate::{CONFIG_FILE_NAME, Config, first_match, utils::get_project_dirs};
+use crate::{CONFIG_FILE_NAME, DEFAULT_CONFIG, first_match, utils::get_project_dirs};
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct InitConfigArgs {
@@ -69,10 +69,7 @@ pub fn init_config(args: InitConfigArgs) -> anyhow::Result<()> {
         }
     };
 
-    let ser =
-        toml::to_string_pretty(&Config::default()).context("Resolving TOML for default config")?;
-
-    file.write_all(ser.as_bytes())
+    file.write_all(DEFAULT_CONFIG.as_bytes())
         .context("Writing default config file")?;
 
     println!("Default config initialized at '{}'", config_path.display());
