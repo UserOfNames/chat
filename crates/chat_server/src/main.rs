@@ -2,7 +2,8 @@ mod init;
 mod run;
 mod utils;
 
-use std::{net::{IpAddr, Ipv4Addr}, path::PathBuf};
+use std::net::IpAddr;
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -34,7 +35,8 @@ enum Commands {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
-    cert_path: PathBuf,
+    tls_cert_path: PathBuf,
+    tls_key_path: PathBuf,
     listener_ip: IpAddr,
     listener_port: u16,
 }

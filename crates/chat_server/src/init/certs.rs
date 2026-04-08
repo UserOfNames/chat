@@ -14,10 +14,6 @@ use crate::{first_match, utils::get_project_dirs};
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct InitCertsArgs {
-    // Path to the directory where the key file and certificate will be placed
-    #[arg(short = 'p', long)]
-    output_path: Option<PathBuf>,
-
     /// Subject Alternative Names (domains/IPs). Defaults to "localhost" if empty
     #[arg(short, long, default_values = ["localhost"])]
     domains: Vec<String>,
@@ -30,38 +26,59 @@ pub struct InitCertsArgs {
     #[arg(long)]
     dry_run: bool,
 
-    /// Name of the certificate file
-    #[arg(long, default_value = "certificate.pem")]
-    cert_name: String,
+    /// Path to the certificate output file
+    #[arg(long)]
+    cert_path: Option<PathBuf>,
 
-    /// Name of the private key file
-    #[arg(long, default_value = "private_key.pem")]
-    key_name: String,
+    /// Path to the private key output file
+    #[arg(long)]
+    key_path: Option<PathBuf>,
 }
 
 pub fn init_certs(args: InitCertsArgs) -> anyhow::Result<()> {
     let project_dirs = get_project_dirs();
 
-    let output_dir = first_match! {
-        Some(path) = &args.output_path => path.as_path(),
-        Some(pd) = &project_dirs => pd.data_dir(),
+    let cert_path = first_match! {
+        Some(path) = args.cert_path => path,
+        Some(pd) = &project_dirs => pd.data_dir().join("certificate.pem"),
     };
 
-    let Some(output_dir) = output_dir else {
-        bail!("Output directory could not be resolved");
+    let Some(cert_path) = cert_path else {
+        bail!("Output path for certificate file could not be resolved");
     };
 
-    let cert_path = output_dir.join(&args.cert_name);
-    let key_path = output_dir.join(&args.key_name);
+    let key_path = first_match! {
+        Some(path) = args.key_path => path,
+        Some(pd) = &project_dirs => pd.data_dir().join("key.pem"),
+    };
+
+    let Some(key_path) = key_path else {
+        bail!("Output path for key file could not be resolved");
+    };
 
     if args.dry_run {
-        println!("Output directory: '{}'", output_dir.display());
-        println!("Certificate file: '{}'", cert_path.display());
-        println!("Key file: '{}'", key_path.display());
+        println!("Certificate path: '{}'", cert_path.display());
+        println!("Key path: '{}'", key_path.display());
         return Ok(());
     }
 
-    create_dir_all(output_dir).context("Creating output directory")?;
+    if let Some(parent) = cert_path.parent() {
+        create_dir_all(parent).with_context(|| {
+            format!(
+                "Creating parent directory for file: '{}'",
+                cert_path.display()
+            )
+        })?;
+    }
+
+    if let Some(parent) = key_path.parent() {
+        create_dir_all(parent).with_context(|| {
+            format!(
+                "Creating parent directory for file: '{}'",
+                key_path.display()
+            )
+        })?;
+    }
 
     let subject_alt_names = args.domains;
     let CertifiedKey { cert, signing_key } =

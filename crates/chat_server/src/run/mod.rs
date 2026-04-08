@@ -33,7 +33,7 @@ pub struct RunArgs {
     listener_port: Option<u16>,
 
     /// Path to the TOML config file for the server.
-    #[arg(long, value_name = "PATH", global = true)]
+    #[arg(long, value_name = "PATH")]
     config_file: Option<PathBuf>,
 }
 
@@ -46,10 +46,12 @@ impl ChatServer {
     fn new(config: Config) -> anyhow::Result<Self> {
         let address = SocketAddr::new(config.listener_ip, config.listener_port);
 
-        let certs = CertificateDer::pem_file_iter(&config.cert_path)
-            .context("ay")?
+        let tls_cert_path = &config.tls_cert_path;
+
+        let certs = CertificateDer::pem_file_iter(tls_cert_path)
+            .with_context(|| format!("Opening TLS certificate file '{}'", tls_cert_path.display()))?
             .collect::<Result<Vec<_>, _>>()
-            .context("uh")?;
+            .context("Reading TLS certificate file")?;
 
         Ok(Self { config })
     }
@@ -82,7 +84,10 @@ pub async fn main(args: RunArgs) -> anyhow::Result<()> {
     }
 
     if let Some(pd) = &project_dirs {
-        figment = figment.merge(Serialized::default("cert_path", pd.data_dir()));
+        let cert_path = pd.data_dir().join("cert.pem");
+        let key_path = pd.data_dir().join("key.pem");
+        figment = figment.merge(Serialized::default("tls_cert_path", cert_path));
+        figment = figment.merge(Serialized::default("tls_key_path", key_path));
     }
 
     let config: Config = figment
