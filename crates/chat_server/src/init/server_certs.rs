@@ -5,8 +5,9 @@ use anyhow::Context;
 use clap::Args;
 use rcgen::{CertificateParams, IsCa, Issuer, KeyPair};
 use serde::{Deserialize, Serialize};
+use shared_utils::first_match;
 
-use crate::{first_match, utils::get_tls_server_dir};
+use crate::DefaultPaths;
 
 use super::{WriteParams, write_with_params};
 
@@ -41,18 +42,16 @@ pub struct InitServerCertsArgs {
     ca_key_path: PathBuf,
 }
 
-pub fn init_server_certs(args: InitServerCertsArgs) -> anyhow::Result<()> {
-    let default_output_dir = get_tls_server_dir();
-
+pub fn init_server_certs(default_paths: Option<DefaultPaths>, args: InitServerCertsArgs) -> anyhow::Result<()> {
     let output_cert_path = first_match! {
-        Some(path) = args.output_cert_path => path,
-        Some(dd) = &default_output_dir => dd.join("certificate.pem"),
+        Some(path) = &args.output_cert_path => path,
+        Some(defaults) = &default_paths => &defaults.server_cert,
     }
     .context("Resolving output path for certificate file")?;
 
     let output_key_path = first_match! {
-        Some(path) = args.output_key_path => path,
-        Some(dd) = &default_output_dir => dd.join("key.pem"),
+        Some(path) = &args.output_key_path => path,
+        Some(defaults) = &default_paths => &defaults.server_key,
     }
     .context("Resolving output path for private key file")?;
 

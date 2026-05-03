@@ -210,7 +210,7 @@ checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 name = "chat_backend"
 version = "0.1.0"
 dependencies = [
- "futures",
+ "clap",
  "network_protocol",
  "rustls",
  "thiserror",
@@ -233,6 +233,7 @@ dependencies = [
  "rcgen",
  "rustls",
  "serde",
+ "shared_utils",
  "tempfile",
  "tokio",
  "tokio-rustls",
@@ -1333,6 +1334,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8bbf91e5a4d6315eee45e704372590b30e260ee83af6639d64557f51b067776"
 dependencies = [
  "serde_core",
+]
+
+[[package]]
+name = "shared_utils"
+version = "0.1.0"
+dependencies = [
+ "directories",
 ]
 
 [[package]]

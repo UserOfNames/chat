@@ -30,3 +30,4 @@ webpki-roots = { version = "1" }
 
 chat_backend = { path = "./crates/chat_backend/" }
 network_protocol = { path = "./crates/network_protocol/" }
+shared_utils = { path = "./crates/shared_utils/" }

@@ -3,8 +3,9 @@ use std::path::PathBuf;
 use anyhow::Context;
 use clap::Args;
 use serde::{Deserialize, Serialize};
+use shared_utils::first_match;
 
-use crate::{CONFIG_FILE_NAME, DEFAULT_CONFIG, first_match, utils::get_project_dirs};
+use crate::{DEFAULT_CONFIG, DefaultPaths};
 
 use super::{WriteParams, write_with_params};
 
@@ -24,12 +25,10 @@ pub struct InitConfigArgs {
     dry_run: bool,
 }
 
-pub fn init_config(args: InitConfigArgs) -> anyhow::Result<()> {
-    let project_dirs = get_project_dirs();
-
+pub fn init_config(default_paths: Option<DefaultPaths>, args: InitConfigArgs) -> anyhow::Result<()> {
     let config_path = first_match! {
-        Some(path) = args.path => path,
-        Some(pd) = &project_dirs => pd.config_dir().join(CONFIG_FILE_NAME),
+        Some(path) = &args.path => path,
+        Some(defaults) = &default_paths => &defaults.config,
     }
     .context("Resolving config file path")?;
 

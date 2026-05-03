@@ -14,6 +14,8 @@ use config::{InitConfigArgs, init_config};
 use server_certs::{InitServerCertsArgs, init_server_certs};
 use tempfile::NamedTempFile;
 
+use crate::DefaultPaths;
+
 #[derive(Debug, Subcommand, Serialize, Deserialize)]
 pub enum InitMode {
     /// Initialize a default config file
@@ -76,10 +78,10 @@ fn write_with_params(paramses: &[WriteParams]) -> io::Result<()> {
     Ok(())
 }
 
-pub fn main(mode: InitMode) -> anyhow::Result<()> {
+pub fn main(default_paths: Option<DefaultPaths>, mode: InitMode) -> anyhow::Result<()> {
     match mode {
-        InitMode::Config(args) => init_config(args),
-        InitMode::CaCerts(args) => init_ca_certs(args),
-        InitMode::ServerCerts(args) => init_server_certs(args),
+        InitMode::Config(args) => init_config(default_paths, args),
+        InitMode::CaCerts(args) => init_ca_certs(default_paths, args),
+        InitMode::ServerCerts(args) => init_server_certs(default_paths, args),
     }
 }

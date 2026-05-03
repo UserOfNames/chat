@@ -1,6 +1,5 @@
 mod init;
 mod run;
-mod utils;
 
 use std::net::IpAddr;
 use std::path::PathBuf;
@@ -10,10 +9,10 @@ use serde::{Deserialize, Serialize};
 
 use init::InitMode;
 use run::RunArgs;
+use shared_utils::NamedProjectDirs;
 
-static ENV_VAR_PREFIX: &str = "MY_CHAT_";
-static CONFIG_FILE_NAME: &str = "config.toml";
-static DEFAULT_CONFIG: &str = include_str!("../data/config.toml");
+const ENV_VAR_PREFIX: &str = "MY_CHAT_";
+const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");
 
 #[allow(clippy::option_option)]
 #[derive(Debug, Parser, Serialize, Deserialize)]
@@ -33,6 +32,7 @@ enum Commands {
     Run(RunArgs),
 }
 
+/// Configuration for the server runtime.
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
     listener_ip: IpAddr,
@@ -41,12 +41,56 @@ struct Config {
     tls_key_path: PathBuf,
 }
 
+/// Collection of relevant paths for the server to read or initialize important files.
+#[derive(Debug)]
+struct DefaultPaths {
+    config: PathBuf,
+    ca_cert: PathBuf,
+    ca_key: PathBuf,
+    server_cert: PathBuf,
+    server_key: PathBuf,
+}
+
+impl DefaultPaths {
+    /// Initialize a `ServerPaths` instance with default paths.
+    ///
+    /// `config`: `NamedProjectDirs::config_dir()/config.toml`
+    /// `ca_cert`: `NamedProjectDirs::data_dir()/tls/ca/certificate.pem`
+    /// `ca_key`: `NamedProjectDirs::data_dir()/tls/ca/key.pem`
+    /// `server_cert`: `NamedProjectDirs::data_dir()/tls/server/certificate.pem`
+    /// `server_key`: `NamedProjectDirs::data_dir()/tls/server/key.pem`
+    fn defaults(component: impl Into<PathBuf>) -> Option<Self> {
+        let base = NamedProjectDirs::new(component)?;
+
+        let config = base.config_dir().join("config.toml");
+
+        let ca_dir = base.data_dir().join("tls").join("ca");
+        let server_cert_dir = base.data_dir().join("tls").join("server");
+
+        let ca_cert = ca_dir.join("certificate.pem");
+        let ca_key = ca_dir.join("key.pem");
+
+        let server_cert = server_cert_dir.join("certificate.pem");
+        let server_key = server_cert_dir.join("key.pem");
+
+        Some(Self {
+            config,
+            ca_cert,
+            ca_key,
+            server_cert,
+            server_key,
+        })
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let global_args = Cli::parse();
 
+    let default_paths = DefaultPaths::defaults("server");
+
     match global_args.command {
-        Commands::Run(args) => run::main(args).await,
-        Commands::Init(mode) => init::main(mode),
+        Commands::Run(args) => run::main(default_paths, args).await,
+        Commands::Init(mode) => init::main(default_paths, mode),
     }
 }

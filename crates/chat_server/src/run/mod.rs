@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use clap::Args;
 use figment::{
     Figment,
@@ -18,14 +18,12 @@ use rustls::{
     pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
 };
 use serde::{Deserialize, Serialize};
+use shared_utils::first_match;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use tokio_util::codec::Framed;
 
-use crate::{
-    CONFIG_FILE_NAME, Config, DEFAULT_CONFIG, ENV_VAR_PREFIX, first_match,
-    utils::{get_project_dirs, get_tls_server_dir},
-};
+use crate::{Config, DEFAULT_CONFIG, ENV_VAR_PREFIX, DefaultPaths};
 
 use connection::Connection;
 
@@ -107,8 +105,7 @@ impl ChatServer {
     }
 }
 
-pub async fn main(args: RunArgs) -> anyhow::Result<()> {
-    let project_dirs = get_project_dirs();
+pub async fn main(default_paths: Option<DefaultPaths>, args: RunArgs) -> anyhow::Result<()> {
     let env_conf_path = std::env::var(format!("{ENV_VAR_PREFIX}CONFIG_FILE"))
         .ok()
         .map(PathBuf::from);
@@ -116,7 +113,7 @@ pub async fn main(args: RunArgs) -> anyhow::Result<()> {
     let config_path = first_match! {
         Some(path) = &args.config_file => path.clone(),
         Some(path) = env_conf_path => path,
-        Some(pd) = &project_dirs => pd.config_dir().join(CONFIG_FILE_NAME),
+        Some(defaults) = &default_paths => defaults.config.clone(),
     };
 
     let mut figment = Figment::new().merge(Toml::string(DEFAULT_CONFIG));
@@ -125,11 +122,9 @@ pub async fn main(args: RunArgs) -> anyhow::Result<()> {
         figment = figment.merge(Toml::file(path));
     }
 
-    if let Some(default_tls_path) = &get_tls_server_dir() {
-        let cert_path = default_tls_path.join("certificate.pem");
-        let key_path = default_tls_path.join("key.pem");
-        figment = figment.merge(Serialized::default("tls_cert_path", cert_path));
-        figment = figment.merge(Serialized::default("tls_key_path", key_path));
+    if let Some(defaults) = &default_paths {
+        figment = figment.merge(Serialized::default("tls_cert_path", &defaults.server_cert));
+        figment = figment.merge(Serialized::default("tls_key_path", &defaults.server_key));
     }
 
     let config: Config = figment

@@ -21,6 +21,7 @@ toml = { workspace = true }
 zeroize = "1"
 
 network_protocol = { workspace = true }
+shared_utils = { workspace = true }
 
 [lints]
 workspace = true
