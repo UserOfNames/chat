@@ -11,9 +11,11 @@ use tokio::{
     time::{Duration, interval},
 };
 
-use chat_backend::ChatBackend;
-use chat_backend::client_command::ClientCommand;
-use chat_backend::client_event::{self, ClientEvent};
+use chat_backend::{
+    ChatBackend, InitError,
+    client_command::ClientCommand,
+    client_event::{self, ClientEvent},
+};
 
 use ui::{
     Action, KeyHandler,
@@ -31,8 +33,12 @@ use crate::ui::popups::SizeHint;
 enum AppError {
     #[error("I/O error: {0}")]
     Io(#[from] io::Error),
+
     #[error("Backend died unexpectedly")]
     BackendDied,
+
+    #[error("Backend failed to initialize: {0}")]
+    BackendInitFailed(#[from] InitError),
 }
 
 type AppResult = Result<(), AppError>;
@@ -188,7 +194,8 @@ impl App {
             }
 
             Action::Connect(host, port) => {
-                self.send_to_backend(ClientCommand::Connect(host, port)).await;
+                self.send_to_backend(ClientCommand::Connect(host, port))
+                    .await;
                 self.popups.clear();
             }
 
@@ -220,7 +227,15 @@ impl App {
 
 #[tokio::main]
 async fn main() -> AppResult {
-    let (backend, handle) = ChatBackend::new();
+    // TODO: Path override
+    let (backend, handle) = match ChatBackend::new(None) {
+        Ok((b, h)) => (b, h),
+        Err(e) => {
+            eprintln!("{e}");
+            return Err(e.into());
+        }
+    };
+
     let app = App::new(handle.event_rx, handle.cmd_tx);
 
     let mut terminal = ratatui::init();

@@ -9,6 +9,6 @@ futures = { workspace = true }
 ratatui = "0.29"
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tui-textarea = "0.7.0"
 
 chat_backend = { workspace = true }
-tui-textarea = "0.7.0"

@@ -1,0 +1,10 @@
+# ADVANCED
+# These options may cause breakages or security issues if changed.
+# Make sure you understand any changes you make.
+#
+# Whether to include default web PKI roots. These are sourced from Mozilla's
+# root certificates, from the `webpki-roots` crate.
+include_webpki_roots = true
+
+# Paths to additional trusted root certificate files.
+additional_root_ca_paths = []

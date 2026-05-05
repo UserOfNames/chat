@@ -2,11 +2,26 @@ pub mod client_command;
 pub mod client_event;
 mod connection;
 
+use std::fs::{create_dir_all, write};
 use std::io;
 use std::ops::ControlFlow;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use rustls::{RootCertStore, pki_types::pem::PemObject};
+use figment::{
+    Figment,
+    providers::{Format, Toml},
+};
+use rustls::{
+    RootCertStore,
+    pki_types::{
+        CertificateDer,
+        pem::{self, PemObject},
+    },
+};
+use serde::{Deserialize, Serialize};
+use shared_utils::{NamedProjectDirs, first_match};
+use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 use client_command::ClientCommand;
@@ -14,6 +29,58 @@ use client_event::ClientEvent;
 use connection::Connection;
 use network_protocol::{NetworkCommand, NetworkEvent};
 use tokio_rustls::TlsConnector;
+
+const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");
+
+#[derive(Debug, Error)]
+pub enum InitError {
+    // This variant is massive, so we have to box it or the linter will complain
+    /// Extracting the [`figment::Figment`] into a [`Config`] failed.
+    #[error("Config resolution failed: {0}")]
+    ConfigResolutionFailed(#[source] Box<figment::Error>),
+
+    /// Reading a certificate file from [`Config::additional_root_ca_paths`] failed.
+    #[error("Reading certificate file '{path}' failed: {source}")]
+    CertFileReadFailed { path: PathBuf, source: pem::Error },
+
+    /// A certificate file from [`Config::additional_root_ca_paths`] could not be added to the main
+    /// [`rustls::RootCertStore`].
+    #[error("Certificate validation failed: {0}")]
+    CertValidationFailed(#[from] rustls::Error),
+}
+
+impl From<figment::Error> for InitError {
+    fn from(value: figment::Error) -> Self {
+        Self::ConfigResolutionFailed(Box::new(value))
+    }
+}
+
+#[derive(Debug)]
+struct DefaultPaths {
+    config: PathBuf,
+}
+
+impl DefaultPaths {
+    /// Initialize a `BackendPaths` instance with default paths.
+    ///
+    /// `config`: `NamedProjectDirs::config_dir()/config.toml`
+    fn defaults(component: impl Into<PathBuf>) -> Option<Self> {
+        let base = NamedProjectDirs::new(component)?;
+
+        let config = base.config_dir().join("config.toml");
+
+        Some(Self { config })
+    }
+}
+
+/// Configuration for the client backend runtime.
+#[derive(Debug, Serialize, Deserialize)]
+struct Config {
+    /// Whether to include common PKI root certificates (default: true)
+    include_webpki_roots: bool,
+    /// Paths to additional root certificates (default: empty)
+    additional_root_ca_paths: Vec<PathBuf>,
+}
 
 /// Contains channels through which to send `ClientCommand`s to the backend and from which to
 /// receive `ClientEvent`s.
@@ -40,28 +107,75 @@ pub struct ChatBackend {
 impl ChatBackend {
     /// Create a new `ChatBackend` and a `BackendHandle` holding the necessary channels to
     /// communicate with the backend.
-    #[must_use]
-    pub fn new() -> (Self, BackendHandle) {
-        let (cmd_tx, cmd_rx) = mpsc::channel::<ClientCommand>(128); // TODO: Buffer size
-        let (event_tx, event_rx) = mpsc::channel::<client_event::Result>(128); // TODO: Buffer size
+    ///
+    /// The backend will attempt to read a config file from a reasonable, OS-specific default
+    /// location: [`NamedProjectDirs`]`::new("client").config_dir().join("config.toml)`. This may
+    /// optionally be overridden by passing a different path.
+    ///
+    /// If no config file is found at the given path, a default config will be generated and placed
+    /// there. This will also attempt to create all requisite parent directories.
+    ///
+    /// # Errors
+    /// See [`InitError`] for all possible errors from this function.
+    pub fn new(config_path_override: Option<PathBuf>) -> Result<(Self, BackendHandle), InitError> {
+        // TODO: error handling
+        let default_paths = DefaultPaths::defaults("client");
 
-        let handle = BackendHandle { cmd_tx, event_rx };
+        let config_path = first_match! {
+            Some(overr) = config_path_override => overr,
+            Some(defaults) = default_paths => defaults.config,
+        };
+
+        let mut figment = Figment::new().merge(Toml::string(DEFAULT_CONFIG));
+
+        if let Some(path) = config_path {
+            if path.exists() {
+                figment = figment.merge(Toml::file(&path));
+            } else {
+                // Writing the default config file is best-effort. No error paths here return or
+                // diverge.
+                #[expect(clippy::collapsible_if)]
+                if let Some(parent) = path.parent() {
+                    if let Err(e) = create_dir_all(parent) {
+                        // TODO: Log error
+                    }
+                }
+
+                if let Err(e) = write(path, DEFAULT_CONFIG) {
+                    // TODO: Log error
+                }
+            }
+        }
+
+        let config: Config = figment.extract()?;
 
         let mut root_cert_store = RootCertStore::empty();
 
-        root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.to_vec());
+        if config.include_webpki_roots {
+            root_cert_store.extend(webpki_roots::TLS_SERVER_ROOTS.to_vec());
+        }
 
-        let x = rustls::pki_types::CertificateDer::from_pem_file(
-            "/home/zdbg/.local/share/my_chat/tls/ca/certificate.pem",
-        )
-        .unwrap();
-        root_cert_store.add(x).unwrap();
+        for path in config.additional_root_ca_paths {
+            let cert = CertificateDer::from_pem_file(&path).map_err(|e| {
+                InitError::CertFileReadFailed {
+                    path: path.clone(),
+                    source: e,
+                }
+            })?;
+
+            root_cert_store.add(cert)?;
+        }
 
         let tls_config = rustls::ClientConfig::builder()
             .with_root_certificates(root_cert_store)
             .with_no_client_auth();
 
         let tls_connector = TlsConnector::from(Arc::new(tls_config));
+
+        let (cmd_tx, cmd_rx) = mpsc::channel::<ClientCommand>(128); // TODO: Buffer size
+        let (event_tx, event_rx) = mpsc::channel::<client_event::Result>(128); // TODO: Buffer size
+
+        let handle = BackendHandle { cmd_tx, event_rx };
 
         let backend = Self {
             tls_connector,
@@ -70,7 +184,7 @@ impl ChatBackend {
             event_tx,
         };
 
-        (backend, handle)
+        Ok((backend, handle))
     }
 
     /// Start the backend.
