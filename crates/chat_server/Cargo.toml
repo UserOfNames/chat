@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = { workspace = true }
 clap = { workspace = true }
+dashmap = { workspace = true }
 figment = { workspace = true }
 futures = { workspace = true }
 directories = { workspace = true }
@@ -15,6 +16,7 @@ serde = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-rustls = { workspace = true }
+tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 
 zeroize = "1"

@@ -1,4 +1,5 @@
 mod connection;
+mod listener;
 
 use std::{
     net::{IpAddr, SocketAddr},
@@ -6,26 +7,27 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{Context, bail};
+use anyhow::Context;
 use clap::Args;
+use dashmap::DashMap;
 use figment::{
     Figment,
     providers::{Env, Format, Serialized, Toml},
 };
-use network_protocol::codecs::ServerCodec;
+use network_protocol::NetworkEvent;
 use rustls::{
     ServerConfig,
     pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
 };
 use serde::{Deserialize, Serialize};
 use shared_utils::first_match;
-use tokio::net::TcpListener;
+use tokio::sync::{broadcast, mpsc};
 use tokio_rustls::TlsAcceptor;
-use tokio_util::codec::Framed;
+use tokio_util::sync::CancellationToken;
 
-use crate::{Config, DEFAULT_CONFIG, ENV_VAR_PREFIX, DefaultPaths};
+use listener::Listener;
 
-use connection::Connection;
+use crate::{Config, DEFAULT_CONFIG, DefaultPaths, ENV_VAR_PREFIX};
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct RunArgs {
@@ -54,19 +56,36 @@ pub struct RunArgs {
     config_file: Option<PathBuf>,
 }
 
+type UserId = usize;
+type ChannelId = String;
+
+/// State shared between all tasks.
+#[derive(Debug)]
+struct ServerState {
+    channels: DashMap<ChannelId, broadcast::Sender<NetworkEvent>>,
+    users: DashMap<UserId, mpsc::Sender<NetworkEvent>>,
+}
+
+impl ServerState {
+    /// Initialize a `ServerState` instance.
+    fn new() -> Self {
+        Self {
+            channels: DashMap::new(),
+            users: DashMap::new(),
+        }
+    }
+}
+
+/// A chat server. To start the server, first initialize it with `new()`. Then, call `run()`.
 struct ChatServer {
-    config: Config,
-    acceptor: TlsAcceptor,
-    listener: TcpListener,
+    bind_address: SocketAddr,
+    tls_acceptor: TlsAcceptor,
+    server_state: Arc<ServerState>,
 }
 
 impl ChatServer {
-    async fn new(config: Config) -> anyhow::Result<Self> {
-        let address = SocketAddr::new(config.listener_ip, config.listener_port);
-
-        let listener = TcpListener::bind(address)
-            .await
-            .with_context(|| format!("Binding TCP listener to address '{address}'"))?;
+    fn new(config: Config) -> anyhow::Result<Self> {
+        let bind_address = SocketAddr::new(config.listener_ip, config.listener_port);
 
         let cert_path_display = config.tls_cert_path.display();
         let certs = CertificateDer::pem_file_iter(&config.tls_cert_path)
@@ -83,23 +102,39 @@ impl ChatServer {
             .with_single_cert(certs, key)
             .context("Configuring TLS: bad certificate or key")?;
 
-        let acceptor = TlsAcceptor::from(Arc::new(tls_config));
+        let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
+
+        let server_state = Arc::new(ServerState::new());
 
         Ok(Self {
-            config,
-            acceptor,
-            listener,
+            bind_address,
+            tls_acceptor,
+            server_state,
         })
     }
 
     async fn run(mut self) -> anyhow::Result<()> {
-        loop {
-            // TODO: error handling
-            let (stream, _addr) = self.listener.accept().await.unwrap();
-            let stream = self.acceptor.accept(stream).await.unwrap();
-            let stream = Framed::new(stream, ServerCodec);
-            todo!();
-        }
+        let cancellation_token = CancellationToken::new();
+
+        let listener = Listener::new(
+            self.server_state.clone(),
+            self.tls_acceptor.clone(),
+            self.bind_address,
+            cancellation_token.child_token(),
+        );
+
+        let listener_handle = tokio::spawn(listener.start());
+
+        tokio::signal::ctrl_c()
+            .await
+            .context("Failed to listen for 'Ctrl-C' signal")?;
+
+        cancellation_token.cancel();
+
+        listener_handle
+            .await
+            .context("Waiting for listeners to close")?
+            .context("Listener closed with error")?;
 
         Ok(())
     }
@@ -134,7 +169,6 @@ pub async fn main(default_paths: Option<DefaultPaths>, args: RunArgs) -> anyhow:
         .context("Resolving configuration")?;
 
     ChatServer::new(config)
-        .await
         .context("Initializing server")?
         .run()
         .await

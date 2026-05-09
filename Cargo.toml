@@ -13,6 +13,7 @@ new_without_default = "allow"
 anyhow = "1"
 bytes = "1"
 clap = { version = "4", features = ["derive"] }
+dashmap = "6"
 directories = "6"
 figment = { version = "0.10", features = ["env", "toml"] }
 futures = "0.3"
@@ -24,6 +25,7 @@ tempfile = "3.2.7"
 thiserror = "2"
 tokio = { version = "1", features = ["full"] }
 tokio-rustls = "0.26"
+tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 webpki-roots = { version = "1" }
 
