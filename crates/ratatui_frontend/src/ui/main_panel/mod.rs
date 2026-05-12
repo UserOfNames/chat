@@ -2,7 +2,7 @@ mod focus;
 mod messages;
 mod sidebar;
 
-use chat_backend::client_event::ChatMessage;
+use chat_backend::{SendDestination, SendMessage, client_event::ReceiveMessage};
 use crossterm::event::{KeyCode, KeyEvent};
 pub use focus::Focus;
 
@@ -61,7 +61,7 @@ impl MainPanel {
     }
 
     /// Add a new chat message to the panel.
-    pub fn add_message(&mut self, msg: ChatMessage) {
+    pub fn add_message(&mut self, msg: ReceiveMessage) {
         self.messages.add_message(msg);
     }
 }
@@ -87,6 +87,11 @@ impl KeyHandler for MainPanel {
 
                 KeyCode::Enter => {
                     let message = self.input.lines().join("");
+                    let message = SendMessage {
+                        contents: message,
+                        destination: SendDestination::Channel("General".to_owned()), // TODO: Destination
+                    };
+
                     self.reset_input();
                     Action::SendMessage(message)
                 }

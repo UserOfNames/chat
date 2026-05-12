@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use chat_backend::client_event::ChatMessage;
+use chat_backend::client_event::ReceiveMessage;
 
 #[derive(Debug)]
 pub struct Messages {
@@ -24,17 +24,17 @@ impl Messages {
         }
     }
 
-    pub fn add_message(&mut self, message: ChatMessage) {
+    pub fn add_message(&mut self, message: ReceiveMessage) {
         // TODO: Align right if you're the sender
         let alignment = Alignment::Left;
 
         let header = Line::from(vec![Span::styled(
-            format!("{}: ", message.sender),
+            format!("{}: ", message.sender_id),
             Style::default().blue(),
         )])
         .alignment(alignment);
 
-        let content = format!("{}: {}", message.sender, message.contents);
+        let content = format!("{}: {}", message.sender_id, message.contents);
         self.messages.push(ListItem::new(content));
         self.state
             .borrow_mut()

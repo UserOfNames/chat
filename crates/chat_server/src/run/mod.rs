@@ -14,7 +14,7 @@ use figment::{
     Figment,
     providers::{Env, Format, Serialized, Toml},
 };
-use network_protocol::NetworkEvent;
+use network_protocol::{NetworkEvent, ChannelId, UserId};
 use rustls::{
     ServerConfig,
     pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
@@ -55,9 +55,6 @@ pub struct RunArgs {
     #[arg(long, value_name = "PATH")]
     config_file: Option<PathBuf>,
 }
-
-type UserId = usize;
-type ChannelId = String;
 
 /// State shared between all tasks.
 #[derive(Debug)]

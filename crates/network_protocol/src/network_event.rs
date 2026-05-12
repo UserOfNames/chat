@@ -1,30 +1,78 @@
 use std::io;
 
-use crate::protobuf_items::{ChatMessageFrame, EventFrame, event_frame};
+use crate::{
+    ChannelId, UserId,
+    protobuf_items::{EventFrame, ReceiveMessageFrame, event_frame, receive_message_frame},
+};
 
-/// A message sent from a client to all other clients connected to the same server.
+pub type ReceiveDestinationFrame = receive_message_frame::Destination;
+
+/// Details about where a chat message is sent to.
 #[derive(Debug, Clone)]
-pub struct ChatMessage {
-    /// The actual message.
-    pub contents: String,
-    /// The sender's nickname.
-    pub sender: String,
+pub enum ReceiveDestination {
+    /// Message is sent directly to the client.
+    Direct,
+
+    /// Message is sent to a channel with the given ID.
+    Channel(ChannelId),
 }
 
-impl From<ChatMessageFrame> for ChatMessage {
-    fn from(value: ChatMessageFrame) -> Self {
-        ChatMessage {
-            contents: value.contents,
-            sender: value.sender,
+impl TryFrom<ReceiveDestinationFrame> for ReceiveDestination {
+    type Error = io::Error;
+
+    fn try_from(value: ReceiveDestinationFrame) -> Result<Self, Self::Error> {
+        Ok(match value {
+            ReceiveDestinationFrame::IsDirect(()) => Self::Direct,
+            ReceiveDestinationFrame::ChannelId(id) => Self::Channel(id),
+        })
+    }
+}
+
+impl From<ReceiveDestination> for ReceiveDestinationFrame {
+    fn from(value: ReceiveDestination) -> Self {
+        match value {
+            ReceiveDestination::Channel(id) => Self::ChannelId(id),
+            ReceiveDestination::Direct => Self::IsDirect(()),
         }
     }
 }
 
-impl From<ChatMessage> for ChatMessageFrame {
-    fn from(value: ChatMessage) -> Self {
-        ChatMessageFrame {
+/// A message sent from some other client to either a specific user, or a whole channel.
+#[derive(Debug, Clone)]
+pub struct ReceiveMessage {
+    /// The message's content.
+    pub contents: String,
+
+    /// The sender's user ID.
+    pub sender_id: UserId,
+
+    /// The destination of the message.
+    pub destination: ReceiveDestination,
+}
+
+impl TryFrom<ReceiveMessageFrame> for ReceiveMessage {
+    type Error = io::Error;
+
+    fn try_from(value: ReceiveMessageFrame) -> Result<Self, Self::Error> {
+        let destination: ReceiveDestination = value
+            .destination
+            .ok_or_else(io_err_invalid_data)?
+            .try_into()?;
+
+        Ok(ReceiveMessage {
             contents: value.contents,
-            sender: value.sender,
+            sender_id: value.sender_id,
+            destination,
+        })
+    }
+}
+
+impl From<ReceiveMessage> for ReceiveMessageFrame {
+    fn from(value: ReceiveMessage) -> Self {
+        Self {
+            contents: value.contents,
+            sender_id: value.sender_id,
+            destination: Some(value.destination.into()),
         }
     }
 }
@@ -33,29 +81,35 @@ impl From<ChatMessage> for ChatMessageFrame {
 #[derive(Debug, Clone)]
 pub enum NetworkEvent {
     /// Received a message from some other connected client.
-    ReceivedMessage(ChatMessage),
+    ReceivedMessage(ReceiveMessage),
 }
 
 impl TryFrom<EventFrame> for NetworkEvent {
     type Error = io::Error;
 
     fn try_from(value: EventFrame) -> Result<Self, Self::Error> {
-        match value.variant {
-            Some(event_frame::Variant::ReceivedMessage(message)) => {
-                Ok(NetworkEvent::ReceivedMessage(message.into()))
-            }
+        use event_frame::Variant;
 
-            _ => Err(io::Error::from(io::ErrorKind::InvalidData)),
+        match value.variant.ok_or_else(io_err_invalid_data)? {
+            Variant::ReceivedMessage(message) => {
+                Ok(NetworkEvent::ReceivedMessage(message.try_into()?))
+            }
         }
     }
 }
 
 impl From<NetworkEvent> for EventFrame {
     fn from(value: NetworkEvent) -> Self {
+        use event_frame::Variant;
+
         match value {
             NetworkEvent::ReceivedMessage(message) => EventFrame {
-                variant: Some(event_frame::Variant::ReceivedMessage(message.into())),
+                variant: Some(Variant::ReceivedMessage(message.into())),
             },
         }
     }
+}
+
+fn io_err_invalid_data() -> io::Error {
+    io::Error::from(io::ErrorKind::InvalidData)
 }

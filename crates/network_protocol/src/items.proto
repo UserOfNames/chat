@@ -6,19 +6,34 @@ import "google/protobuf/empty.proto";
 // Frame for network-bound commands, sent from the client backend to the server.
 message CommandFrame {
   oneof variant {
-    string send_message = 1;
+    SendMessageFrame send_message = 1;
+    string join_channel = 2;
+  }
+}
+
+message SendMessageFrame {
+  string contents = 1;
+  
+  oneof destination {
+    string channel_id = 2;
+    string user_id = 3;
   }
 }
 
 // Frame for network-bound events, sent from the server to the client backend.
 message EventFrame {
   oneof variant {
-    ChatMessageFrame received_message = 1;
+    ReceiveMessageFrame received_message = 1;
   }
 }
 
 // Frame for a chat message.
-message ChatMessageFrame {
+message ReceiveMessageFrame {
   string contents = 1;
-  string sender = 2;
+  string sender_id = 2;
+
+  oneof destination {
+    google.protobuf.Empty is_direct = 3;
+    string channel_id = 4;
+  }
 }

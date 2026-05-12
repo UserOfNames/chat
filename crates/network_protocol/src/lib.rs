@@ -1,3 +1,8 @@
+/// Type to uniquely identify clients.
+pub type UserId = String;
+/// Type to uniquely identify channels.
+pub type ChannelId = String;
+
 /// Default port the server listens to for new connections.
 pub const DEFAULT_LISTENER_PORT: u16 = 12345;
 
@@ -6,9 +11,9 @@ mod protobuf_items {
 }
 
 mod network_command;
-pub use network_command::NetworkCommand;
+pub use network_command::{NetworkCommand, SendDestination, SendMessage};
 
 mod network_event;
-pub use network_event::{ChatMessage, NetworkEvent};
+pub use network_event::{NetworkEvent, ReceiveDestination, ReceiveMessage};
 
 pub mod codecs;

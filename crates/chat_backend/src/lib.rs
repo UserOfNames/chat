@@ -2,6 +2,8 @@ pub mod client_command;
 pub mod client_event;
 mod connection;
 
+pub use network_protocol::{ReceiveDestination, ReceiveMessage, SendDestination, SendMessage};
+
 use std::fs::{create_dir_all, write};
 use std::io;
 use std::ops::ControlFlow;

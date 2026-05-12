@@ -1,4 +1,4 @@
-pub use network_protocol::ChatMessage;
+pub use network_protocol::ReceiveMessage;
 
 use std::io;
 use std::result::Result as StdResult;
@@ -27,7 +27,7 @@ pub enum ClientEvent {
     /// Server disconnected.
     Disconnected,
     /// Received a message sent by another client.
-    ReceivedMessage(ChatMessage),
+    ReceivedMessage(ReceiveMessage),
 }
 
 impl From<NetworkEvent> for ClientEvent {

@@ -1,7 +1,7 @@
 use std::{io, sync::Arc};
 
 use futures::{SinkExt, StreamExt};
-use network_protocol::{ChatMessage, NetworkCommand, NetworkEvent, codecs::ServerCodec};
+use network_protocol::{ReceiveMessage, NetworkCommand, NetworkEvent, codecs::ServerCodec};
 use tokio::{net::TcpStream, sync::mpsc};
 use tokio_rustls::{TlsAcceptor, server::TlsStream};
 use tokio_stream::{StreamMap, wrappers::BroadcastStream};
@@ -59,7 +59,7 @@ impl Connection {
         tls_acceptor: TlsAcceptor,
         stream: TcpStream,
     ) {
-        let user_id = 1; // TODO: user IDs
+        let user_id = "abcdefg".to_owned(); // TODO: user IDs
 
         let stream = match tls_acceptor.accept(stream).await {
             Ok(stream) => stream,
@@ -74,14 +74,14 @@ impl Connection {
         // between when the connection is registered and when the guard is active
         #[allow(clippy::used_underscore_binding)]
         let _guard = ConnectionGuard {
-            user_id,
+            user_id: user_id.clone(),
             server_state: server_state.clone(),
         };
 
         let (event_tx, event_rx) = mpsc::channel(128); // TODO: Buffer size
 
         // Register this connection in the ServerState
-        server_state.users.insert(user_id, event_tx);
+        server_state.users.insert(user_id.clone(), event_tx);
 
         let connection = Self {
             user_id,
@@ -132,6 +132,7 @@ impl Connection {
     async fn handle_command(&mut self, command: NetworkCommand) {
         match command {
             NetworkCommand::SendMessage(msg) => todo!("send message"),
+            NetworkCommand::JoinChannel(channel) => todo!("join channel"),
         };
     }
 }
