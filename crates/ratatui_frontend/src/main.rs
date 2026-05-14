@@ -16,6 +16,7 @@ use chat_backend::{
     client_command::ClientCommand,
     client_event::{self, ClientEvent},
 };
+use network_protocol::{NetworkCommand, NetworkEvent};
 
 use ui::{
     Action, KeyHandler,
@@ -26,8 +27,6 @@ use ui::{
         popup_area,
     },
 };
-
-use crate::ui::popups::SizeHint;
 
 #[derive(Debug, Error)]
 enum AppError {
@@ -146,9 +145,17 @@ impl App {
                 self.main_panel.disconnect();
             }
 
-            ClientEvent::ReceivedMessage(msg) => {
-                self.main_panel.add_message(msg);
-            }
+            ClientEvent::NetworkEvent(event) => self.handle_network_event(event).await,
+        }
+    }
+
+    /// Handle a `NetworkEvent` forwarded from the backend.
+    async fn handle_network_event(&mut self, event: NetworkEvent) {
+        match event {
+            NetworkEvent::ServerHello(hello) => self.main_panel.sync_hello(hello),
+            NetworkEvent::ChannelSync(channel_sync) => self.main_panel.sync_channels(channel_sync),
+            NetworkEvent::UserSync(user_sync) => self.main_panel.sync_users(user_sync),
+            NetworkEvent::ReceivedMessage(message) => self.main_panel.add_message(message),
         }
     }
 
@@ -200,7 +207,9 @@ impl App {
             }
 
             Action::SendMessage(msg) => {
-                self.send_to_backend(ClientCommand::SendMessage(msg)).await;
+                let cmd = NetworkCommand::SendMessage(msg);
+                self.send_to_backend(ClientCommand::NetworkCommand(cmd))
+                    .await;
             }
         }
     }

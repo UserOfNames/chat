@@ -238,24 +238,11 @@ impl ChatBackend {
 
     /// Handle a `ClientCommand` coming from the frontend.
     async fn handle_command(&mut self, command: ClientCommand) -> ControlFlow<()> {
-        #[expect(clippy::match_wildcard_for_single_variants)]
         match command {
-            // "Special case" arms.
             ClientCommand::Connect(host, port) => self.connect(host, port).await,
             ClientCommand::Disconnect => self.disconnect().await,
             ClientCommand::Quit => return ControlFlow::Break(()),
-
-            // If we get here, all remaining ClientCommands should have a NetworkCommand
-            // equivalent. This is for commands that only need to be passed to the server. If any
-            // local handling is required, it should be handled in its own arm above. Between the
-            // special arms and the `TryFrom` implementation on `NetworkCommand`, all possible
-            // cases should be covered. If not, that must be fixed immediately, so we `expect()`
-            // it.
-            _ => {
-                let command = NetworkCommand::try_from(command)
-                    .expect("Improper conversion from ClientCommand to NetworkCommand. The developers did not handle a special case.");
-                self.send_network_command(command).await;
-            }
+            ClientCommand::NetworkCommand(net_cmd) => self.send_network_command(net_cmd).await,
         }
 
         ControlFlow::Continue(())
@@ -263,9 +250,7 @@ impl ChatBackend {
 
     /// Handle a `NetworkEvent` coming from the server.
     async fn handle_event(&mut self, event: NetworkEvent) {
-        match event {
-            NetworkEvent::ReceivedMessage(_) => self.send_ui_event(event.into()).await,
-        }
+        self.send_ui_event(event.into()).await;
     }
 
     /// Attempt to connect to the server at `host:port`. The UI will be notified about whether the

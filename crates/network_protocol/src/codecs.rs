@@ -6,7 +6,7 @@ use prost::Message;
 use prost::bytes::Buf;
 use tokio_util::codec::{Decoder, Encoder};
 
-use crate::protobuf_items::{CommandFrame, EventFrame};
+use crate::proto::{CommandFrame, EventFrame};
 use crate::{NetworkCommand, NetworkEvent};
 
 /// A codec for a client-side `Framed` `TcpStream`. Internally, this uses protobuf with a varint

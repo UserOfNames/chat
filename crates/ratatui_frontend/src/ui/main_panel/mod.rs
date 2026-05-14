@@ -5,6 +5,7 @@ mod sidebar;
 use chat_backend::{SendDestination, SendMessage, client_event::ReceiveMessage};
 use crossterm::event::{KeyCode, KeyEvent};
 pub use focus::Focus;
+use network_protocol::{ChannelSync, ServerHello, UserSync};
 
 use super::{Action, KeyHandler, popups::commands::CommandsPopup};
 use messages::Messages;
@@ -63,6 +64,21 @@ impl MainPanel {
     /// Add a new chat message to the panel.
     pub fn add_message(&mut self, msg: ReceiveMessage) {
         self.messages.add_message(msg);
+    }
+
+    /// Process the initial `ServerHello` sync.
+    pub fn sync_hello(&mut self, hello: ServerHello) {
+        todo!("");
+    }
+
+    /// Update channel list with a `ChannelSync` from the server.
+    pub fn sync_channels(&mut self, channel_sync: ChannelSync) {
+        todo!("");
+    }
+
+    /// Update user list with a `UserSync` from the server.
+    pub fn sync_users(&mut self, user_sync: UserSync) {
+        todo!("");
     }
 }
 

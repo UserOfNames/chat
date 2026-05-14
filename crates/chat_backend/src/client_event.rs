@@ -26,14 +26,12 @@ pub enum ClientEvent {
     Connected(String),
     /// Server disconnected.
     Disconnected,
-    /// Received a message sent by another client.
-    ReceivedMessage(ReceiveMessage),
+    /// Events originating from the server
+    NetworkEvent(NetworkEvent),
 }
 
 impl From<NetworkEvent> for ClientEvent {
     fn from(value: NetworkEvent) -> Self {
-        match value {
-            NetworkEvent::ReceivedMessage(m) => Self::ReceivedMessage(m),
-        }
+        Self::NetworkEvent(value)
     }
 }

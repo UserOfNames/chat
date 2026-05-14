@@ -2,10 +2,12 @@ use std::io;
 
 use crate::{
     ChannelId, UserId,
-    protobuf_items::{CommandFrame, SendMessageFrame, command_frame, send_message_frame},
+    proto::{
+        ClientHello, CommandFrame, SendMessage as ProtoSendMessage, command_frame, send_message,
+    },
 };
 
-pub type SendDestinationFrame = send_message_frame::Destination;
+pub type SendDestinationFrame = send_message::Destination;
 
 /// Where to send a chat message.
 #[derive(Debug, Clone)]
@@ -22,8 +24,8 @@ impl TryFrom<SendDestinationFrame> for SendDestination {
 
     fn try_from(value: SendDestinationFrame) -> Result<Self, Self::Error> {
         Ok(match value {
-            SendDestinationFrame::ChannelId(id) => Self::Channel(id),
-            SendDestinationFrame::UserId(id) => Self::User(id),
+            SendDestinationFrame::ChannelId(id) => Self::Channel(id.try_into()?),
+            SendDestinationFrame::UserId(id) => Self::User(id.try_into()?),
         })
     }
 }
@@ -31,8 +33,8 @@ impl TryFrom<SendDestinationFrame> for SendDestination {
 impl From<SendDestination> for SendDestinationFrame {
     fn from(value: SendDestination) -> Self {
         match value {
-            SendDestination::Channel(id) => Self::ChannelId(id),
-            SendDestination::User(id) => Self::UserId(id),
+            SendDestination::Channel(id) => Self::ChannelId(id.into()),
+            SendDestination::User(id) => Self::UserId(id.into()),
         }
     }
 }
@@ -47,10 +49,10 @@ pub struct SendMessage {
     pub destination: SendDestination,
 }
 
-impl TryFrom<SendMessageFrame> for SendMessage {
+impl TryFrom<ProtoSendMessage> for SendMessage {
     type Error = io::Error;
 
-    fn try_from(value: SendMessageFrame) -> Result<Self, Self::Error> {
+    fn try_from(value: ProtoSendMessage) -> Result<Self, Self::Error> {
         let destination: SendDestination = value
             .destination
             .ok_or_else(io_err_invalid_data)?
@@ -63,7 +65,7 @@ impl TryFrom<SendMessageFrame> for SendMessage {
     }
 }
 
-impl From<SendMessage> for SendMessageFrame {
+impl From<SendMessage> for ProtoSendMessage {
     fn from(value: SendMessage) -> Self {
         Self {
             contents: value.contents,
@@ -75,6 +77,9 @@ impl From<SendMessage> for SendMessageFrame {
 /// A command sent from the client backend to the server.
 #[derive(Debug, Clone)]
 pub enum NetworkCommand {
+    /// Initial message to the server, requesting to connect.
+    ClientHello,
+
     /// Send the given message.
     SendMessage(SendMessage),
 
@@ -86,31 +91,33 @@ impl TryFrom<CommandFrame> for NetworkCommand {
     type Error = io::Error;
 
     fn try_from(value: CommandFrame) -> Result<Self, Self::Error> {
-        use command_frame::Variant as Variant;
+        use command_frame::Variant;
 
         match value.variant.ok_or_else(io_err_invalid_data)? {
-            Variant::SendMessage(message) => {
-                Ok(NetworkCommand::SendMessage(message.try_into()?))
-            }
+            Variant::ClientHello(ClientHello { hello: _ }) => Ok(NetworkCommand::ClientHello),
 
-            Variant::JoinChannel(channel) => {
-                Ok(NetworkCommand::JoinChannel(channel))
-            }
+            Variant::SendMessage(message) => Ok(NetworkCommand::SendMessage(message.try_into()?)),
+
+            Variant::JoinChannel(channel) => Ok(NetworkCommand::JoinChannel(channel.try_into()?)),
         }
     }
 }
 
 impl From<NetworkCommand> for CommandFrame {
     fn from(value: NetworkCommand) -> Self {
-        use command_frame::Variant as Variant;
+        use command_frame::Variant;
 
         match value {
+            NetworkCommand::ClientHello => CommandFrame {
+                variant: Some(Variant::ClientHello(ClientHello { hello: Some(()) })),
+            },
+
             NetworkCommand::SendMessage(message) => CommandFrame {
                 variant: Some(Variant::SendMessage(message.into())),
             },
 
             NetworkCommand::JoinChannel(channel) => CommandFrame {
-                variant: Some(Variant::JoinChannel(channel))
+                variant: Some(Variant::JoinChannel(channel.into())),
             },
         }
     }

@@ -1,9 +1,8 @@
-use network_protocol::{NetworkCommand, SendMessage};
+use network_protocol::NetworkCommand;
 
 /// A command from the UI to the client backend.
 #[derive(Debug)]
 pub enum ClientCommand {
-    // === Local-only ===
     /// Connect to the server with host `String` and port `Option<u16>`. If no port is given, the
     /// [`default port`](network_protocol::DEFAULT_LISTENER_PORT) is used.
     Connect(String, Option<u16>),
@@ -11,19 +10,6 @@ pub enum ClientCommand {
     Disconnect,
     /// Shut down the backend.
     Quit,
-
-    // === Passed to nework ===
-    /// Send a message to other clients connected to the server.
-    SendMessage(SendMessage),
-}
-
-impl TryFrom<ClientCommand> for NetworkCommand {
-    type Error = ();
-
-    fn try_from(value: ClientCommand) -> Result<Self, Self::Error> {
-        match value {
-            ClientCommand::SendMessage(mes) => Ok(Self::SendMessage(mes)),
-            _ => Err(()),
-        }
-    }
+    /// Commands which pass on to the network.
+    NetworkCommand(NetworkCommand),
 }

@@ -3,37 +3,79 @@ package network_protocol.items;
 
 import "google/protobuf/empty.proto";
 
+message ChannelId {
+  string id = 1;
+}
+
+message UserId {
+  string id = 1;
+}
+
+// ======================================================
+// ====================== COMMANDS ======================
+// ======================================================
+
 // Frame for network-bound commands, sent from the client backend to the server.
 message CommandFrame {
   oneof variant {
-    SendMessageFrame send_message = 1;
-    string join_channel = 2;
+    ClientHello client_hello = 1;
+    SendMessage send_message = 2;
+    ChannelId join_channel = 3;
   }
 }
 
-message SendMessageFrame {
+// Request to send a message to a channel or other users.
+message SendMessage {
   string contents = 1;
   
   oneof destination {
-    string channel_id = 2;
-    string user_id = 3;
+    ChannelId channel_id = 2;
+    UserId user_id = 3;
   }
 }
+
+// Request to connect to the server.
+message ClientHello {
+  google.protobuf.Empty hello = 1;
+}
+
+// ======================================================
+// ======================= EVENTS =======================
+// ======================================================
 
 // Frame for network-bound events, sent from the server to the client backend.
 message EventFrame {
   oneof variant {
-    ReceiveMessageFrame received_message = 1;
+    ServerHello server_hello = 1;
+    ChannelSync channel_sync = 2;
+    UserSync user_sync = 3;
+    ReceivedMessage received_message = 4;
   }
 }
 
-// Frame for a chat message.
-message ReceiveMessageFrame {
+// Client-bound chat message.
+message ReceivedMessage {
   string contents = 1;
-  string sender_id = 2;
+  UserId sender_id = 2;
 
   oneof destination {
     google.protobuf.Empty is_direct = 3;
-    string channel_id = 4;
+    ChannelId channel_id = 4;
   }
+}
+
+// Initial message to give the client session info and state.
+message ServerHello {
+  UserId your_id = 1;
+  ChannelId default_channel_id = 2;
+}
+
+// Message to sync information about channels on the server.
+message ChannelSync {
+  repeated ChannelId channel_ids = 1;
+}
+
+// Message to sync information about users on the server.
+message UserSync {
+  repeated UserId user_ids = 1;
 }

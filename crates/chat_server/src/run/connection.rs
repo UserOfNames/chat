@@ -131,6 +131,7 @@ impl Connection {
 
     async fn handle_command(&mut self, command: NetworkCommand) {
         match command {
+            NetworkCommand::ClientHello => todo!("send hello"),
             NetworkCommand::SendMessage(msg) => todo!("send message"),
             NetworkCommand::JoinChannel(channel) => todo!("join channel"),
         };

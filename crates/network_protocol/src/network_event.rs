@@ -2,10 +2,13 @@ use std::io;
 
 use crate::{
     ChannelId, UserId,
-    protobuf_items::{EventFrame, ReceiveMessageFrame, event_frame, receive_message_frame},
+    proto::{
+        self, ChannelSync as ProtoChannelSync, EventFrame, ReceivedMessage as ProtoReceivedMessage,
+        ServerHello as ProtoServerHello, UserSync as ProtoUserSync, event_frame, received_message,
+    },
 };
 
-pub type ReceiveDestinationFrame = receive_message_frame::Destination;
+pub type ProtoReceiveDestination = received_message::Destination;
 
 /// Details about where a chat message is sent to.
 #[derive(Debug, Clone)]
@@ -17,21 +20,21 @@ pub enum ReceiveDestination {
     Channel(ChannelId),
 }
 
-impl TryFrom<ReceiveDestinationFrame> for ReceiveDestination {
+impl TryFrom<ProtoReceiveDestination> for ReceiveDestination {
     type Error = io::Error;
 
-    fn try_from(value: ReceiveDestinationFrame) -> Result<Self, Self::Error> {
+    fn try_from(value: ProtoReceiveDestination) -> Result<Self, Self::Error> {
         Ok(match value {
-            ReceiveDestinationFrame::IsDirect(()) => Self::Direct,
-            ReceiveDestinationFrame::ChannelId(id) => Self::Channel(id),
+            ProtoReceiveDestination::IsDirect(()) => Self::Direct,
+            ProtoReceiveDestination::ChannelId(id) => Self::Channel(id.try_into()?),
         })
     }
 }
 
-impl From<ReceiveDestination> for ReceiveDestinationFrame {
+impl From<ReceiveDestination> for ProtoReceiveDestination {
     fn from(value: ReceiveDestination) -> Self {
         match value {
-            ReceiveDestination::Channel(id) => Self::ChannelId(id),
+            ReceiveDestination::Channel(id) => Self::ChannelId(id.into()),
             ReceiveDestination::Direct => Self::IsDirect(()),
         }
     }
@@ -50,36 +53,138 @@ pub struct ReceiveMessage {
     pub destination: ReceiveDestination,
 }
 
-impl TryFrom<ReceiveMessageFrame> for ReceiveMessage {
+impl TryFrom<ProtoReceivedMessage> for ReceiveMessage {
     type Error = io::Error;
 
-    fn try_from(value: ReceiveMessageFrame) -> Result<Self, Self::Error> {
+    fn try_from(value: ProtoReceivedMessage) -> Result<Self, Self::Error> {
         let destination: ReceiveDestination = value
             .destination
             .ok_or_else(io_err_invalid_data)?
             .try_into()?;
 
+        let sender_id: UserId = value
+            .sender_id
+            .ok_or_else(io_err_invalid_data)?
+            .try_into()?;
+
         Ok(ReceiveMessage {
             contents: value.contents,
-            sender_id: value.sender_id,
+            sender_id,
             destination,
         })
     }
 }
 
-impl From<ReceiveMessage> for ReceiveMessageFrame {
+impl From<ReceiveMessage> for ProtoReceivedMessage {
     fn from(value: ReceiveMessage) -> Self {
         Self {
             contents: value.contents,
-            sender_id: value.sender_id,
+            sender_id: Some(value.sender_id.into()),
             destination: Some(value.destination.into()),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ServerHello {
+    your_id: UserId,
+    default_channel_id: ChannelId,
+}
+
+impl TryFrom<ProtoServerHello> for ServerHello {
+    type Error = io::Error;
+
+    fn try_from(value: proto::ServerHello) -> Result<Self, Self::Error> {
+        let your_id: UserId = value.your_id.ok_or_else(io_err_invalid_data)?.try_into()?;
+
+        let default_channel_id: ChannelId = value
+            .default_channel_id
+            .ok_or_else(io_err_invalid_data)?
+            .try_into()?;
+
+        Ok(Self {
+            your_id,
+            default_channel_id,
+        })
+    }
+}
+
+impl From<ServerHello> for ProtoServerHello {
+    fn from(value: ServerHello) -> Self {
+        Self {
+            your_id: Some(value.your_id.into()),
+            default_channel_id: Some(value.default_channel_id.into()),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ChannelSync {
+    channel_ids: Vec<ChannelId>,
+}
+
+impl TryFrom<ProtoChannelSync> for ChannelSync {
+    type Error = io::Error;
+
+    fn try_from(value: ProtoChannelSync) -> Result<Self, Self::Error> {
+        let channel_ids: Vec<ChannelId> = value
+            .channel_ids
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self { channel_ids })
+    }
+}
+
+impl From<ChannelSync> for ProtoChannelSync {
+    fn from(value: ChannelSync) -> Self {
+        let channel_ids: Vec<proto::ChannelId> =
+            value.channel_ids.into_iter().map(Into::into).collect();
+
+        Self { channel_ids }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UserSync {
+    user_ids: Vec<UserId>,
+}
+
+impl TryFrom<ProtoUserSync> for UserSync {
+    type Error = io::Error;
+
+    fn try_from(value: ProtoUserSync) -> Result<Self, Self::Error> {
+        let user_ids: Vec<UserId> = value
+            .user_ids
+            .into_iter()
+            .map(TryInto::try_into)
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self { user_ids })
+    }
+}
+
+impl From<UserSync> for ProtoUserSync {
+    fn from(value: UserSync) -> Self {
+        let user_ids: Vec<proto::UserId> = value.user_ids.into_iter().map(Into::into).collect();
+
+        Self { user_ids }
     }
 }
 
 /// An event sent from the server to the client backend.
 #[derive(Debug, Clone)]
 pub enum NetworkEvent {
+    /// Initial message to give the client session info and state.
+    ServerHello(ServerHello),
+
+    /// Message to sync information about channels on the server.
+    ChannelSync(ChannelSync),
+
+    /// Message to sync information about users on the server.
+    UserSync(UserSync),
+
     /// Received a message from some other connected client.
     ReceivedMessage(ReceiveMessage),
 }
@@ -91,6 +196,12 @@ impl TryFrom<EventFrame> for NetworkEvent {
         use event_frame::Variant;
 
         match value.variant.ok_or_else(io_err_invalid_data)? {
+            Variant::ServerHello(hello) => Ok(Self::ServerHello(hello.try_into()?)),
+
+            Variant::ChannelSync(channel_sync) => Ok(Self::ChannelSync(channel_sync.try_into()?)),
+
+            Variant::UserSync(user_sync) => Ok(Self::UserSync(user_sync.try_into()?)),
+
             Variant::ReceivedMessage(message) => {
                 Ok(NetworkEvent::ReceivedMessage(message.try_into()?))
             }
@@ -103,6 +214,18 @@ impl From<NetworkEvent> for EventFrame {
         use event_frame::Variant;
 
         match value {
+            NetworkEvent::ServerHello(hello) => Self {
+                variant: Some(Variant::ServerHello(hello.into())),
+            },
+
+            NetworkEvent::ChannelSync(channel_sync) => Self {
+                variant: Some(Variant::ChannelSync(channel_sync.into())),
+            },
+
+            NetworkEvent::UserSync(user_sync) => Self {
+                variant: Some(Variant::UserSync(user_sync.into())),
+            },
+
             NetworkEvent::ReceivedMessage(message) => EventFrame {
                 variant: Some(Variant::ReceivedMessage(message.into())),
             },
