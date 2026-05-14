@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use ratatui::{
     layout::{Constraint, Direction, Layout},
     prelude::{Buffer, Rect},
@@ -7,7 +9,7 @@ use ratatui::{
 
 #[derive(Debug)]
 pub struct Sidebar {
-    pub connected_addr: Option<String>,
+    pub connected_addr: Option<SocketAddr>,
 }
 
 impl Sidebar {
@@ -35,7 +37,7 @@ impl Widget for &Sidebar {
             .areas(inner_area);
 
         let connection_text = if let Some(addr) = &self.connected_addr {
-            Paragraph::new(addr.as_str()).green()
+            Paragraph::new(addr.to_string()).green()
         } else {
             Paragraph::new("Not connected").red()
         };

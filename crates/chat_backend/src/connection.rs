@@ -1,4 +1,5 @@
 use std::io;
+use std::net::{SocketAddr, ToSocketAddrs};
 
 use futures::{SinkExt, StreamExt};
 use rustls::pki_types::ServerName;
@@ -14,6 +15,7 @@ use network_protocol::{NetworkCommand, NetworkEvent};
 #[derive(Debug)]
 pub struct Connection {
     stream: Framed<TlsStream<TcpStream>, ClientCodec>,
+    addr: SocketAddr,
 }
 
 impl Connection {
@@ -37,11 +39,18 @@ impl Connection {
             )
         })?;
 
-        let stream = TcpStream::connect((host, port)).await?;
+        let addr = (host, port).to_socket_addrs()?.next().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("socket address {host} with port {port} did not resolve"),
+            )
+        })?;
+
+        let stream = TcpStream::connect(addr).await?;
         let stream = tls_connector.connect(domain, stream).await?;
         let stream = Framed::new(stream, ClientCodec);
 
-        Ok(Self { stream })
+        Ok(Self { stream, addr })
     }
 
     /// Consume the `Connection` and attempt a clean disconnect.
@@ -64,5 +73,9 @@ impl Connection {
     /// Returns an error if the message was received, but was corrupted in some way.
     pub async fn receive_event(&mut self) -> Option<io::Result<NetworkEvent>> {
         self.stream.next().await
+    }
+
+    pub fn addr(&self) -> SocketAddr {
+        self.addr
     }
 }

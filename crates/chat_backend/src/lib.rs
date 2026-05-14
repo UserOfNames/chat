@@ -264,8 +264,9 @@ impl ChatBackend {
             }
         };
 
+        let addr = connection.addr();
         self.connection = Some(connection);
-        self.send_ui_event(ClientEvent::Connected(host)).await;
+        self.send_ui_event(ClientEvent::Connected(addr)).await;
     }
 
     /// Disconnect from the server.

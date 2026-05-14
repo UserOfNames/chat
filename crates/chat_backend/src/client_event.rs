@@ -1,6 +1,7 @@
 pub use network_protocol::ReceiveMessage;
 
 use std::io;
+use std::net::SocketAddr;
 use std::result::Result as StdResult;
 
 use thiserror::Error;
@@ -23,7 +24,7 @@ pub type Result = StdResult<ClientEvent, Error>;
 #[derive(Debug)]
 pub enum ClientEvent {
     /// Successfully connected to the server with address `String`.
-    Connected(String),
+    Connected(SocketAddr),
     /// Server disconnected.
     Disconnected,
     /// Events originating from the server

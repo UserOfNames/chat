@@ -2,6 +2,8 @@ mod focus;
 mod messages;
 mod sidebar;
 
+use std::net::SocketAddr;
+
 use chat_backend::{SendDestination, SendMessage, client_event::ReceiveMessage};
 use crossterm::event::{KeyCode, KeyEvent};
 pub use focus::Focus;
@@ -52,7 +54,7 @@ impl MainPanel {
     }
 
     /// Update the panel to indicate a new server connection.
-    pub fn connect(&mut self, addr: String) {
+    pub fn connect(&mut self, addr: SocketAddr) {
         self.sidebar.connected_addr = Some(addr);
     }
 
