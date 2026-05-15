@@ -1,7 +1,10 @@
-use std::{io, sync::Arc};
+use std::sync::Arc;
 
 use futures::{SinkExt, StreamExt};
-use network_protocol::{ReceiveMessage, NetworkCommand, NetworkEvent, codecs::ServerCodec};
+use network_protocol::{
+    NetworkCommand, NetworkEvent, ReceiveDestination, ReceiveMessage, SendDestination, SendMessage,
+    codecs::ServerCodec,
+};
 use tokio::{net::TcpStream, sync::mpsc};
 use tokio_rustls::{TlsAcceptor, server::TlsStream};
 use tokio_stream::{StreamMap, wrappers::BroadcastStream};
@@ -31,8 +34,8 @@ pub struct Connection {
     /// Shared server state.
     server_state: Arc<ServerState>,
 
-    /// Stream of commands coming from the client.
-    stream: Framed<TlsStream<TcpStream>, ServerCodec>,
+    /// Stream of commands coming from the client, or sending back to the client.
+    client_stream: Framed<TlsStream<TcpStream>, ServerCodec>,
 
     /// Channel for events coming from elsewhere on the server. Typically outbound towards the
     /// client.
@@ -57,18 +60,18 @@ impl Connection {
     pub async fn start(
         server_state: Arc<ServerState>,
         tls_acceptor: TlsAcceptor,
-        stream: TcpStream,
+        client_stream: TcpStream,
     ) {
         let user_id = "abcdefg".to_owned(); // TODO: user IDs
 
-        let stream = match tls_acceptor.accept(stream).await {
+        let client_stream = match tls_acceptor.accept(client_stream).await {
             Ok(stream) => stream,
             Err(e) => {
                 // TODO: log error
                 return;
             }
         };
-        let stream = Framed::new(stream, ServerCodec);
+        let client_stream = Framed::new(client_stream, ServerCodec);
 
         // It's important that we create the guard before registering, or else there is a gap
         // between when the connection is registered and when the guard is active
@@ -86,7 +89,7 @@ impl Connection {
         let connection = Self {
             user_id,
             server_state,
-            stream,
+            client_stream,
             event_rx,
             joined_channels: StreamMap::new(),
             _guard,
@@ -103,10 +106,10 @@ impl Connection {
     async fn run(mut self) {
         loop {
             tokio::select! {
-                network_cmd = self.stream.next() => match network_cmd {
+                network_cmd = self.client_stream.next() => match network_cmd {
                     Some(cmd) => match cmd {
                         Ok(cmd) => self.handle_command(cmd).await,
-                        Err(e) => todo!("log error"),
+                        Err(e) => todo!("Log error, report to sender"),
                     }
 
                     None => {
@@ -115,14 +118,15 @@ impl Connection {
                     }
                 },
 
-                direct_msg = self.event_rx.recv() => {
-                    todo!();
+                direct_msg = self.event_rx.recv() => match direct_msg {
+                    Some(msg) => self.send_event_to_client(msg).await,
+                    None => todo!(),
                 },
 
                 Some((channel_name, result)) = self.joined_channels.next() => {
                     match result {
-                        Ok(msg) => self.stream.send(msg).await.unwrap(),
-                        Err(e) => todo!("Log error"),
+                        Ok(msg) => self.send_event_to_client(msg).await,
+                        Err(e) => todo!("Log error, report to sender"),
                     }
                 }
             }
@@ -132,8 +136,65 @@ impl Connection {
     async fn handle_command(&mut self, command: NetworkCommand) {
         match command {
             NetworkCommand::ClientHello => todo!("send hello"),
-            NetworkCommand::SendMessage(msg) => todo!("send message"),
-            NetworkCommand::JoinChannel(channel) => todo!("join channel"),
-        };
+            NetworkCommand::SendMessage(msg) => self.send_message(msg).await,
+            NetworkCommand::JoinChannel(channel_id) => self.join_channel(channel_id).await,
+        }
+    }
+
+    #[allow(clippy::unused_async)]
+    async fn send_message(&mut self, message: SendMessage) {
+        let SendMessage {
+            destination,
+            contents,
+        } = message;
+
+        match destination {
+            SendDestination::Channel(channel_id) => {
+                let Some(channel) = self.server_state.channels.get(&channel_id) else {
+                    todo!("Log error, report to sender");
+                };
+
+                let event = NetworkEvent::ReceivedMessage(ReceiveMessage {
+                    contents,
+                    sender_id: self.user_id.clone(),
+                    destination: ReceiveDestination::Channel(channel_id),
+                });
+
+                if let Err(e) = channel.send(event) {
+                    todo!("Log error, report to sender {e}");
+                }
+            }
+
+            SendDestination::User(user_id) => {
+                let Some(user) = self.server_state.users.get(&user_id) else {
+                    todo!("Log error, report to sender");
+                };
+
+                let event = NetworkEvent::ReceivedMessage(ReceiveMessage {
+                    contents,
+                    sender_id: self.user_id.clone(),
+                    destination: ReceiveDestination::Direct,
+                });
+
+                if let Err(e) = user.send(event).await {
+                    todo!("Log error, report to sender {e}");
+                }
+            }
+        }
+    }
+
+    async fn join_channel(&mut self, channel_id: ChannelId) {
+        if let Some(channel) = self.server_state.channels.get(&channel_id) {
+            let receiver = channel.subscribe();
+            self.joined_channels.insert(channel_id, receiver.into());
+        } else {
+            todo!("Log and report error");
+        }
+    }
+
+    async fn send_event_to_client(&mut self, message: NetworkEvent) {
+        if let Err(e) = self.client_stream.send(message).await {
+            todo!("Log error, report to sender");
+        }
     }
 }

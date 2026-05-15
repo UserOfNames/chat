@@ -1,5 +1,14 @@
+# Host address the listener task binds to
 listener_ip = "127.0.0.1"
+
+# Port the listener task binds to
 listener_port = 12345
 
+# Path to the TLS certificate file
 # tls_cert_path = ""
+
+# Path to the TLS private key file associated with the certificate
 # tls_key_path = ""
+
+# List of all the channel IDs on the server
+channel_ids = [ "General" ]

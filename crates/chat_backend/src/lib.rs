@@ -1,8 +1,9 @@
 pub mod client_command;
 pub mod client_event;
+pub mod ui_state;
 mod connection;
 
-pub use network_protocol::{ReceiveDestination, ReceiveMessage, SendDestination, SendMessage};
+pub use network_protocol::{ReceiveDestination, ReceivedMessage, SendDestination, SendMessage};
 
 use std::fs::{create_dir_all, write};
 use std::io;

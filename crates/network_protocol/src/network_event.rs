@@ -42,7 +42,7 @@ impl From<ReceiveDestination> for ProtoReceiveDestination {
 
 /// A message sent from some other client to either a specific user, or a whole channel.
 #[derive(Debug, Clone)]
-pub struct ReceiveMessage {
+pub struct ReceivedMessage {
     /// The message's content.
     pub contents: String,
 
@@ -53,7 +53,7 @@ pub struct ReceiveMessage {
     pub destination: ReceiveDestination,
 }
 
-impl TryFrom<ProtoReceivedMessage> for ReceiveMessage {
+impl TryFrom<ProtoReceivedMessage> for ReceivedMessage {
     type Error = io::Error;
 
     fn try_from(value: ProtoReceivedMessage) -> Result<Self, Self::Error> {
@@ -67,7 +67,7 @@ impl TryFrom<ProtoReceivedMessage> for ReceiveMessage {
             .ok_or_else(io_err_invalid_data)?
             .try_into()?;
 
-        Ok(ReceiveMessage {
+        Ok(ReceivedMessage {
             contents: value.contents,
             sender_id,
             destination,
@@ -75,8 +75,8 @@ impl TryFrom<ProtoReceivedMessage> for ReceiveMessage {
     }
 }
 
-impl From<ReceiveMessage> for ProtoReceivedMessage {
-    fn from(value: ReceiveMessage) -> Self {
+impl From<ReceivedMessage> for ProtoReceivedMessage {
+    fn from(value: ReceivedMessage) -> Self {
         Self {
             contents: value.contents,
             sender_id: Some(value.sender_id.into()),
@@ -186,7 +186,7 @@ pub enum NetworkEvent {
     UserSync(UserSync),
 
     /// Received a message from some other connected client.
-    ReceivedMessage(ReceiveMessage),
+    ReceivedMessage(ReceivedMessage),
 }
 
 impl TryFrom<EventFrame> for NetworkEvent {
