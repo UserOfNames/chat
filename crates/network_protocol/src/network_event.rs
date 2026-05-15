@@ -87,8 +87,8 @@ impl From<ReceivedMessage> for ProtoReceivedMessage {
 
 #[derive(Debug, Clone)]
 pub struct ServerHello {
-    your_id: UserId,
-    default_channel_id: ChannelId,
+    pub your_id: UserId,
+    pub default_channel_id: ChannelId,
 }
 
 impl TryFrom<ProtoServerHello> for ServerHello {
@@ -120,7 +120,7 @@ impl From<ServerHello> for ProtoServerHello {
 
 #[derive(Debug, Clone)]
 pub struct ChannelSync {
-    channel_ids: Vec<ChannelId>,
+    pub channel_ids: Vec<ChannelId>,
 }
 
 impl TryFrom<ProtoChannelSync> for ChannelSync {
@@ -148,7 +148,7 @@ impl From<ChannelSync> for ProtoChannelSync {
 
 #[derive(Debug, Clone)]
 pub struct UserSync {
-    user_ids: Vec<UserId>,
+    pub user_ids: Vec<UserId>,
 }
 
 impl TryFrom<ProtoUserSync> for UserSync {

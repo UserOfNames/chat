@@ -1219,7 +1219,6 @@ dependencies = [
  "chat_backend",
  "crossterm",
  "futures",
- "network_protocol",
  "ratatui",
  "thiserror",
  "tokio",

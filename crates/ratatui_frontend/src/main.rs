@@ -13,10 +13,12 @@ use tokio::{
 
 use chat_backend::{
     ChatBackend, InitError,
-    client_command::ClientCommand,
-    client_event::{self, ClientEvent},
+    network_protocol::{
+        NetworkCommand, NetworkEvent,
+        client_command::ClientCommand,
+        client_event::{self, ClientEvent},
+    },
 };
-use network_protocol::{NetworkCommand, NetworkEvent};
 
 use ui::{
     Action, KeyHandler,
