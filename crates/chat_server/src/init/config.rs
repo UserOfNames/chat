@@ -25,7 +25,10 @@ pub struct InitConfigArgs {
     dry_run: bool,
 }
 
-pub fn init_config(default_paths: Option<DefaultPaths>, args: InitConfigArgs) -> anyhow::Result<()> {
+pub fn init_config(
+    default_paths: Option<DefaultPaths>,
+    args: InitConfigArgs,
+) -> anyhow::Result<()> {
     let config_path = first_match! {
         Some(path) = &args.path => path,
         Some(defaults) = &default_paths => &defaults.config,

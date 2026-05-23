@@ -292,7 +292,6 @@ impl ChatBackend {
             None => todo!("Log error: connection closed unexpectedly"),
         };
 
-
         // Fetch the channel list and initial user list. Currently, we treat this as a full,
         // automatic state dump. In future versions, this may be paginated and done lazily to
         // minimize network traffic.

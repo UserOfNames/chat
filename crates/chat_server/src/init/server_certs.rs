@@ -42,7 +42,10 @@ pub struct InitServerCertsArgs {
     ca_key_path: PathBuf,
 }
 
-pub fn init_server_certs(default_paths: Option<DefaultPaths>, args: InitServerCertsArgs) -> anyhow::Result<()> {
+pub fn init_server_certs(
+    default_paths: Option<DefaultPaths>,
+    args: InitServerCertsArgs,
+) -> anyhow::Result<()> {
     let output_cert_path = first_match! {
         Some(path) = &args.output_cert_path => path,
         Some(defaults) = &default_paths => &defaults.server_cert,

@@ -161,8 +161,10 @@ impl App {
 
             // Remaining events should all be auto-routable to the UIServerState instance. If not,
             // we failed to handle a special case in this match statement.
-            _ => if let Some(ui_server_state) = &mut self.ui_server_state {
-                ui_server_state.update_from_event(event);
+            _ => {
+                if let Some(ui_server_state) = &mut self.ui_server_state {
+                    ui_server_state.update_from_event(event);
+                }
             }
         }
     }

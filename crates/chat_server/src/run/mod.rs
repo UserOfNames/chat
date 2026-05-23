@@ -167,7 +167,6 @@ pub async fn main(default_paths: Option<DefaultPaths>, args: RunArgs) -> anyhow:
         figment = figment.merge(Toml::file(path));
     }
 
-
     if let Some(defaults) = &default_paths {
         figment = figment.merge(Serialized::default("tls_cert_path", &defaults.server_cert));
         figment = figment.merge(Serialized::default("tls_key_path", &defaults.server_key));

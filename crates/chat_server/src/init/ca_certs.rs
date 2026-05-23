@@ -29,7 +29,10 @@ pub struct InitCACertsArgs {
     output_key_path: Option<PathBuf>,
 }
 
-pub fn init_ca_certs(default_paths: Option<DefaultPaths>, args: InitCACertsArgs) -> anyhow::Result<()> {
+pub fn init_ca_certs(
+    default_paths: Option<DefaultPaths>,
+    args: InitCACertsArgs,
+) -> anyhow::Result<()> {
     let output_cert_path = first_match! {
         Some(path) = &args.output_cert_path => path,
         Some(defaults) = &default_paths => &defaults.ca_cert,
