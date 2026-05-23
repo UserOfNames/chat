@@ -6,10 +6,12 @@ pub mod codecs;
 mod network_command;
 mod network_event;
 
-pub use network_command::{NetworkCommand, SendDestination, SendMessage};
+pub use network_command::{
+    FetchChannels, FetchUsers, NetworkCommand, SendDestination, SendMessage,
+};
 
 pub use network_event::{
-    ChannelSync, NetworkEvent, ReceiveDestination, ReceiveMessage, ServerHello, UserSync,
+    ChannelSync, NetworkEvent, ReceiveDestination, ReceivedMessage, ServerHello, UserSync,
 };
 
 use std::io;

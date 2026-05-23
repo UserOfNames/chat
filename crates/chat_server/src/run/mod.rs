@@ -14,7 +14,7 @@ use figment::{
     Figment,
     providers::{Env, Format, Serialized, Toml},
 };
-use network_protocol::{NetworkEvent, ChannelId, UserId};
+use network_protocol::{ChannelId, NetworkEvent, UserId};
 use rustls::{
     ServerConfig,
     pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
@@ -31,6 +31,10 @@ use crate::{Config, DEFAULT_CONFIG, DefaultPaths, ENV_VAR_PREFIX};
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct RunArgs {
+    /// Path to the TOML config file for the server
+    #[arg(long, value_name = "PATH")]
+    config_file: Option<PathBuf>,
+
     /// The address the TCP listener binds to
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
@@ -51,22 +55,25 @@ pub struct RunArgs {
     #[arg(long)]
     tls_key_path: Option<PathBuf>,
 
-    /// Path to the TOML config file for the server
+    /// List of all the channel IDs on the server
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long, value_name = "PATH")]
-    config_file: Option<PathBuf>,
+    channel_ids: Option<Vec<ChannelId>>,
 }
 
 /// State shared between all tasks.
 #[derive(Debug)]
 struct ServerState {
+    default_channel_id: Option<ChannelId>,
     channels: DashMap<ChannelId, broadcast::Sender<NetworkEvent>>,
     users: DashMap<UserId, mpsc::Sender<NetworkEvent>>,
 }
 
 impl ServerState {
     /// Initialize a `ServerState` instance.
-    fn new() -> Self {
+    fn new(default_channel_id: Option<ChannelId>) -> Self {
         Self {
+            default_channel_id,
             channels: DashMap::new(),
             users: DashMap::new(),
         }
@@ -101,7 +108,13 @@ impl ChatServer {
 
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
 
-        let server_state = Arc::new(ServerState::new());
+        let default_channel_id = config.channel_ids.first().cloned();
+        let server_state = Arc::new(ServerState::new(default_channel_id));
+
+        for channel_id in config.channel_ids {
+            let (tx, _rx) = broadcast::channel(128); // TODO: Buffer size
+            server_state.channels.insert(channel_id, tx);
+        }
 
         Ok(Self {
             bind_address,
@@ -153,6 +166,7 @@ pub async fn main(default_paths: Option<DefaultPaths>, args: RunArgs) -> anyhow:
     if let Some(path) = config_path {
         figment = figment.merge(Toml::file(path));
     }
+
 
     if let Some(defaults) = &default_paths {
         figment = figment.merge(Serialized::default("tls_cert_path", &defaults.server_cert));

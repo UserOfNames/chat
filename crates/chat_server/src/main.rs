@@ -5,6 +5,7 @@ use std::net::IpAddr;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use network_protocol::ChannelId;
 use serde::{Deserialize, Serialize};
 
 use init::InitMode;
@@ -35,10 +36,20 @@ enum Commands {
 /// Configuration for the server runtime.
 #[derive(Debug, Serialize, Deserialize)]
 struct Config {
+    /// Host address the listener task binds to.
     listener_ip: IpAddr,
+
+    /// Port the listener task binds to.
     listener_port: u16,
+
+    /// Path to the TLS certificate file.
     tls_cert_path: PathBuf,
+
+    /// Path to the TLS private key file associated with the certificate.
     tls_key_path: PathBuf,
+
+    /// List of all the channel IDs on the server.
+    channel_ids: Vec<ChannelId>,
 }
 
 /// Collection of relevant paths for the server to read or initialize important files.

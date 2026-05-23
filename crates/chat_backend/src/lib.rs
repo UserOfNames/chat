@@ -1,8 +1,12 @@
 pub mod client_command;
 pub mod client_event;
 mod connection;
+pub mod ui_server_state;
 
-pub use network_protocol::{ReceiveDestination, ReceiveMessage, SendDestination, SendMessage};
+/// Convenience re-export of types from [`network_protocol`].
+pub mod network_protocol {
+    pub use network_protocol::*;
+}
 
 use std::fs::{create_dir_all, write};
 use std::io;
@@ -10,6 +14,7 @@ use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use ::network_protocol::{FetchChannels, FetchUsers, ServerHello};
 use figment::{
     Figment,
     providers::{Format, Toml},
@@ -31,6 +36,8 @@ use client_event::ClientEvent;
 use connection::Connection;
 use network_protocol::{NetworkCommand, NetworkEvent};
 use tokio_rustls::TlsConnector;
+
+use crate::client_event::InitialSync;
 
 const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");
 
@@ -250,13 +257,18 @@ impl ChatBackend {
 
     /// Handle a `NetworkEvent` coming from the server.
     async fn handle_event(&mut self, event: NetworkEvent) {
-        self.send_ui_event(event.into()).await;
+        let event = match event.try_into() {
+            Ok(event) => event,
+            Err(e) => todo!("Log error"),
+        };
+
+        self.send_ui_event(event).await;
     }
 
     /// Attempt to connect to the server at `host:port`. The UI will be notified about whether the
     /// connection is successful or not.
     async fn connect(&mut self, host: String, port: Option<u16>) {
-        let connection = match Connection::connect(&host, port, &self.tls_connector).await {
+        let mut connection = match Connection::connect(&host, port, &self.tls_connector).await {
             Ok(conn) => conn,
             Err(e) => {
                 self.send_ui_error(e.into()).await;
@@ -264,9 +276,48 @@ impl ChatBackend {
             }
         };
 
+        if let Err(e) = connection.send_command(NetworkCommand::ClientHello).await {
+            todo!("Log failed connection");
+        }
+
+        // We expect the server to send its Hello immediately after we send ours. Otherwise, we
+        // cannot establish necessary basic state.
+        let ServerHello {
+            your_id,
+            default_channel_id,
+        } = match connection.receive_event().await {
+            Some(Ok(NetworkEvent::ServerHello(hello))) => hello,
+            Some(Ok(other)) => todo!("Log error: missed HELLO {other:?}"),
+            Some(Err(e)) => todo!("Log error: event error {e}"),
+            None => todo!("Log error: connection closed unexpectedly"),
+        };
+
+
+        // Fetch the channel list and initial user list. Currently, we treat this as a full,
+        // automatic state dump. In future versions, this may be paginated and done lazily to
+        // minimize network traffic.
+        if let Err(e) = connection
+            .send_command(NetworkCommand::FetchChannels(FetchChannels))
+            .await
+        {
+            todo!("Log error: failed to request channels {e}")
+        }
+
+        if let Err(e) = connection
+            .send_command(NetworkCommand::FetchUsers(FetchUsers))
+            .await
+        {
+            todo!("Log error: failed to request users {e}")
+        }
+
         let addr = connection.addr();
         self.connection = Some(connection);
-        self.send_ui_event(ClientEvent::Connected(addr)).await;
+        self.send_ui_event(ClientEvent::InitialSync(InitialSync {
+            your_id,
+            default_channel_id,
+            server_addr: addr,
+        }))
+        .await;
     }
 
     /// Disconnect from the server.

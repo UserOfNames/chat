@@ -42,7 +42,7 @@ impl From<ReceiveDestination> for ProtoReceiveDestination {
 
 /// A message sent from some other client to either a specific user, or a whole channel.
 #[derive(Debug, Clone)]
-pub struct ReceiveMessage {
+pub struct ReceivedMessage {
     /// The message's content.
     pub contents: String,
 
@@ -53,7 +53,7 @@ pub struct ReceiveMessage {
     pub destination: ReceiveDestination,
 }
 
-impl TryFrom<ProtoReceivedMessage> for ReceiveMessage {
+impl TryFrom<ProtoReceivedMessage> for ReceivedMessage {
     type Error = io::Error;
 
     fn try_from(value: ProtoReceivedMessage) -> Result<Self, Self::Error> {
@@ -67,7 +67,7 @@ impl TryFrom<ProtoReceivedMessage> for ReceiveMessage {
             .ok_or_else(io_err_invalid_data)?
             .try_into()?;
 
-        Ok(ReceiveMessage {
+        Ok(ReceivedMessage {
             contents: value.contents,
             sender_id,
             destination,
@@ -75,8 +75,8 @@ impl TryFrom<ProtoReceivedMessage> for ReceiveMessage {
     }
 }
 
-impl From<ReceiveMessage> for ProtoReceivedMessage {
-    fn from(value: ReceiveMessage) -> Self {
+impl From<ReceivedMessage> for ProtoReceivedMessage {
+    fn from(value: ReceivedMessage) -> Self {
         Self {
             contents: value.contents,
             sender_id: Some(value.sender_id.into()),
@@ -87,8 +87,8 @@ impl From<ReceiveMessage> for ProtoReceivedMessage {
 
 #[derive(Debug, Clone)]
 pub struct ServerHello {
-    your_id: UserId,
-    default_channel_id: ChannelId,
+    pub your_id: UserId,
+    pub default_channel_id: Option<ChannelId>,
 }
 
 impl TryFrom<ProtoServerHello> for ServerHello {
@@ -97,10 +97,10 @@ impl TryFrom<ProtoServerHello> for ServerHello {
     fn try_from(value: proto::ServerHello) -> Result<Self, Self::Error> {
         let your_id: UserId = value.your_id.ok_or_else(io_err_invalid_data)?.try_into()?;
 
-        let default_channel_id: ChannelId = value
+        let default_channel_id = value
             .default_channel_id
-            .ok_or_else(io_err_invalid_data)?
-            .try_into()?;
+            .map(TryInto::try_into)
+            .transpose()?;
 
         Ok(Self {
             your_id,
@@ -113,14 +113,14 @@ impl From<ServerHello> for ProtoServerHello {
     fn from(value: ServerHello) -> Self {
         Self {
             your_id: Some(value.your_id.into()),
-            default_channel_id: Some(value.default_channel_id.into()),
+            default_channel_id: value.default_channel_id.map(Into::into),
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ChannelSync {
-    channel_ids: Vec<ChannelId>,
+    pub channel_ids: Vec<ChannelId>,
 }
 
 impl TryFrom<ProtoChannelSync> for ChannelSync {
@@ -148,7 +148,7 @@ impl From<ChannelSync> for ProtoChannelSync {
 
 #[derive(Debug, Clone)]
 pub struct UserSync {
-    user_ids: Vec<UserId>,
+    pub user_ids: Vec<UserId>,
 }
 
 impl TryFrom<ProtoUserSync> for UserSync {
@@ -185,8 +185,14 @@ pub enum NetworkEvent {
     /// Message to sync information about users on the server.
     UserSync(UserSync),
 
+    /// A new user joined the server.
+    UserJoined(UserId),
+
+    /// A user left the server.
+    UserLeft(UserId),
+
     /// Received a message from some other connected client.
-    ReceivedMessage(ReceiveMessage),
+    ReceivedMessage(ReceivedMessage),
 }
 
 impl TryFrom<EventFrame> for NetworkEvent {
@@ -201,6 +207,10 @@ impl TryFrom<EventFrame> for NetworkEvent {
             Variant::ChannelSync(channel_sync) => Ok(Self::ChannelSync(channel_sync.try_into()?)),
 
             Variant::UserSync(user_sync) => Ok(Self::UserSync(user_sync.try_into()?)),
+
+            Variant::UserJoined(user_id) => Ok(Self::UserJoined(user_id.try_into()?)),
+
+            Variant::UserLeft(user_id) => Ok(Self::UserLeft(user_id.try_into()?)),
 
             Variant::ReceivedMessage(message) => {
                 Ok(NetworkEvent::ReceivedMessage(message.try_into()?))
@@ -224,6 +234,14 @@ impl From<NetworkEvent> for EventFrame {
 
             NetworkEvent::UserSync(user_sync) => Self {
                 variant: Some(Variant::UserSync(user_sync.into())),
+            },
+
+            NetworkEvent::UserJoined(user_id) => Self {
+                variant: Some(Variant::UserJoined(user_id.into())),
+            },
+
+            NetworkEvent::UserLeft(user_id) => Self {
+                variant: Some(Variant::UserLeft(user_id.into())),
             },
 
             NetworkEvent::ReceivedMessage(message) => EventFrame {

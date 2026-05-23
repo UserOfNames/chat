@@ -12,4 +12,3 @@ tokio = { workspace = true }
 tui-textarea = "0.7.0"
 
 chat_backend = { workspace = true }
-network_protocol = { workspace = true }

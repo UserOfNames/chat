@@ -15,8 +15,9 @@ use chat_backend::{
     ChatBackend, InitError,
     client_command::ClientCommand,
     client_event::{self, ClientEvent},
+    network_protocol::{NetworkCommand, SendDestination, SendMessage},
+    ui_server_state::{MessageContext, UIServerState},
 };
-use network_protocol::{NetworkCommand, NetworkEvent};
 
 use ui::{
     Action, KeyHandler,
@@ -46,17 +47,25 @@ type AppResult = Result<(), AppError>;
 /// the backend.
 #[derive(Debug)]
 struct App {
+    /// State for the current server connection, if any.
+    ui_server_state: Option<UIServerState>,
+
     /// Channel for receiving events (or errors) from the backend.
     backend_receiver: Receiver<client_event::Result>,
+
     /// Channel for sending commands to the backend.
     backend_sender: Sender<ClientCommand>,
+
     /// Async stream of `Crossterm` events.
     event_stream: EventStream,
+
     /// Boolean flag set when the user requests to quit the application. This is used to determine
     /// whether a backend shutdown was intentional (Ok) or not (Err).
     is_quitting: bool,
+
     /// The main panel: an input area, a list of message, and a sidebar.
     main_panel: MainPanel,
+
     /// A stack of `Popup`s.
     popups: Vec<Box<dyn Popup>>,
 }
@@ -66,6 +75,7 @@ impl App {
     /// that should be created first, and the relevant channels should be given to this method.
     fn new(receiver: Receiver<client_event::Result>, sender: Sender<ClientCommand>) -> Self {
         Self {
+            ui_server_state: None,
             backend_receiver: receiver,
             backend_sender: sender,
             event_stream: EventStream::new(),
@@ -120,8 +130,12 @@ impl App {
     }
 
     /// Draw a single frame to the terminal.
-    fn draw(&self, frame: &mut Frame) {
-        frame.render_widget(&self.main_panel, frame.area());
+    fn draw(&mut self, frame: &mut Frame) {
+        self.main_panel.render(
+            frame.area(),
+            frame.buffer_mut(),
+            self.ui_server_state.as_ref(),
+        );
 
         // Since popups are a stack, we only render the 'top' one.
         if let Some(popup) = self.popups.last() {
@@ -135,27 +149,24 @@ impl App {
     /// Handle a `ClientEvent` coming from the backend.
     async fn handle_client_event(&mut self, event: ClientEvent) {
         match event {
-            ClientEvent::Connected(addr) => {
-                self.main_panel.connect(addr);
+            ClientEvent::InitialSync(sync) => {
+                self.ui_server_state = Some(UIServerState::new(sync));
             }
 
             ClientEvent::Disconnected => {
                 self.notify("Disconnected".to_owned(), NoticeLevel::Notification)
                     .await;
-                self.main_panel.disconnect();
+                self.ui_server_state = None;
             }
 
-            ClientEvent::NetworkEvent(event) => self.handle_network_event(event).await,
-        }
-    }
-
-    /// Handle a `NetworkEvent` forwarded from the backend.
-    async fn handle_network_event(&mut self, event: NetworkEvent) {
-        match event {
-            NetworkEvent::ServerHello(hello) => self.main_panel.sync_hello(hello),
-            NetworkEvent::ChannelSync(channel_sync) => self.main_panel.sync_channels(channel_sync),
-            NetworkEvent::UserSync(user_sync) => self.main_panel.sync_users(user_sync),
-            NetworkEvent::ReceivedMessage(message) => self.main_panel.add_message(message),
+            // Remaining events should all be auto-routable to the UIServerState instance. If not,
+            // we failed to handle a special case in this match statement.
+            // TODO: Rewrite with an if let guard
+            _ => {
+                if let Some(ui_server_state) = &mut self.ui_server_state {
+                    ui_server_state.update_from_event(event);
+                }
+            }
         }
     }
 
@@ -206,10 +217,57 @@ impl App {
                 self.popups.clear();
             }
 
-            Action::SendMessage(msg) => {
-                let cmd = NetworkCommand::SendMessage(msg);
-                self.send_to_backend(ClientCommand::NetworkCommand(cmd))
+            Action::SendMessage(message) => {
+                let Some(state) = &self.ui_server_state else {
+                    // TODO: Log error - cannot send while disconnected
+                    return;
+                };
+
+                let destination = match &state.message_context {
+                    Some(MessageContext::Channel(id)) => SendDestination::Channel(id.clone()),
+                    Some(MessageContext::Direct(id)) => SendDestination::User(id.clone()),
+                    None => {
+                        // TODO: Log error - cannot send to None context
+                        return;
+                    }
+                };
+
+                let message = SendMessage {
+                    contents: message,
+                    destination,
+                };
+
+                let command = NetworkCommand::SendMessage(message);
+
+                self.send_to_backend(ClientCommand::NetworkCommand(command))
                     .await;
+            }
+
+            Action::SelectChannelIndex(i) => {
+                // Selecting a channel when not connected is a NOP.
+                let Some(state) = &self.ui_server_state else {
+                    return;
+                };
+
+                let Some(channel_id) = state.channels.iter().nth(i) else {
+                    // TODO: Report OOB selection? Shouldn't ever be possible, though, so idk
+                    return;
+                };
+
+                let channel_id = channel_id.clone();
+
+                self.send_to_backend(ClientCommand::NetworkCommand(NetworkCommand::JoinChannel(
+                    channel_id.clone(),
+                )))
+                .await;
+
+                if let Some(state) = &mut self.ui_server_state {
+                    state.message_context = Some(MessageContext::Channel(channel_id));
+                }
+            }
+
+            Action::YieldFocus => {
+                unreachable!("This is always handled further up the call hierarchy");
             }
         }
     }

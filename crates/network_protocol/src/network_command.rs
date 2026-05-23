@@ -3,7 +3,8 @@ use std::io;
 use crate::{
     ChannelId, UserId,
     proto::{
-        ClientHello, CommandFrame, SendMessage as ProtoSendMessage, command_frame, send_message,
+        self, ClientHello, CommandFrame, SendMessage as ProtoSendMessage, command_frame,
+        send_message,
     },
 };
 
@@ -36,6 +37,46 @@ impl From<SendDestination> for SendDestinationFrame {
             SendDestination::Channel(id) => Self::ChannelId(id.into()),
             SendDestination::User(id) => Self::UserId(id.into()),
         }
+    }
+}
+
+/// A request to fetch the server's channel list in bulk.
+#[derive(Debug, Clone)]
+pub struct FetchChannels;
+
+impl TryFrom<proto::FetchChannels> for FetchChannels {
+    type Error = io::Error;
+
+    fn try_from(value: proto::FetchChannels) -> Result<Self, Self::Error> {
+        let _value = value;
+        Ok(Self {})
+    }
+}
+
+impl From<FetchChannels> for proto::FetchChannels {
+    fn from(value: FetchChannels) -> Self {
+        let _value = value;
+        Self { empty: Some(()) }
+    }
+}
+
+/// A request to fetch the server's user list in bulk.
+#[derive(Debug, Clone)]
+pub struct FetchUsers;
+
+impl TryFrom<proto::FetchUsers> for FetchUsers {
+    type Error = io::Error;
+
+    fn try_from(value: proto::FetchUsers) -> Result<Self, Self::Error> {
+        let _value = value;
+        Ok(Self {})
+    }
+}
+
+impl From<FetchUsers> for proto::FetchUsers {
+    fn from(value: FetchUsers) -> Self {
+        let _value = value;
+        Self { empty: Some(()) }
     }
 }
 
@@ -80,6 +121,12 @@ pub enum NetworkCommand {
     /// Initial message to the server, requesting to connect.
     ClientHello,
 
+    /// Fetch the server's channel list in bulk.
+    FetchChannels(FetchChannels),
+
+    /// Fetch the server's user list in bulk.
+    FetchUsers(FetchUsers),
+
     /// Send the given message.
     SendMessage(SendMessage),
 
@@ -96,6 +143,10 @@ impl TryFrom<CommandFrame> for NetworkCommand {
         match value.variant.ok_or_else(io_err_invalid_data)? {
             Variant::ClientHello(ClientHello { hello: _ }) => Ok(NetworkCommand::ClientHello),
 
+            Variant::FetchChannels(fetch) => Ok(NetworkCommand::FetchChannels(fetch.try_into()?)),
+
+            Variant::FetchUsers(fetch) => Ok(NetworkCommand::FetchUsers(fetch.try_into()?)),
+
             Variant::SendMessage(message) => Ok(NetworkCommand::SendMessage(message.try_into()?)),
 
             Variant::JoinChannel(channel) => Ok(NetworkCommand::JoinChannel(channel.try_into()?)),
@@ -110,6 +161,14 @@ impl From<NetworkCommand> for CommandFrame {
         match value {
             NetworkCommand::ClientHello => CommandFrame {
                 variant: Some(Variant::ClientHello(ClientHello { hello: Some(()) })),
+            },
+
+            NetworkCommand::FetchChannels(fetch) => CommandFrame {
+                variant: Some(Variant::FetchChannels(fetch.into())),
+            },
+
+            NetworkCommand::FetchUsers(fetch) => CommandFrame {
+                variant: Some(Variant::FetchUsers(fetch.into())),
             },
 
             NetworkCommand::SendMessage(message) => CommandFrame {

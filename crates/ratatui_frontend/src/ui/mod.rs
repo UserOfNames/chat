@@ -1,7 +1,6 @@
 pub mod main_panel;
 pub mod popups;
 
-use chat_backend::SendMessage;
 use crossterm::event::KeyEvent;
 
 use popups::Popup;
@@ -13,7 +12,10 @@ pub enum Action {
     PushPopup(Box<dyn Popup>),
     PopPopup,
     Connect(String, Option<u16>),
-    SendMessage(SendMessage),
+    SendMessage(String),
+    YieldFocus,
+
+    SelectChannelIndex(usize),
 }
 
 pub trait KeyHandler {

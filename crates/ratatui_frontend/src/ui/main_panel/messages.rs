@@ -1,3 +1,4 @@
+// TODO: Rework in light of channel implementation
 use std::cell::RefCell;
 
 use ratatui::{
@@ -8,53 +9,56 @@ use ratatui::{
     widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use chat_backend::client_event::ReceiveMessage;
+use chat_backend::{client_event::ReceivedMessage, ui_server_state::UIServerState};
 
 #[derive(Debug)]
 pub struct Messages {
     messages: Vec<ListItem<'static>>,
-    state: RefCell<ListState>,
+    list_state: RefCell<ListState>,
 }
 
 impl Messages {
     pub fn new() -> Self {
         Self {
             messages: Vec::new(),
-            state: RefCell::new(ListState::default()),
+            list_state: RefCell::new(ListState::default()),
         }
     }
 
-    pub fn add_message(&mut self, message: ReceiveMessage) {
-        // TODO: Align right if you're the sender
-        let alignment = Alignment::Left;
+    // pub fn add_message(&mut self, message: ReceivedMessage) {
+    //     // TODO: Align right if you're the sender
+    //     let alignment = Alignment::Left;
+    //
+    //     let header = Line::from(vec![Span::styled(
+    //         format!("{}: ", message.sender_id),
+    //         Style::default().blue(),
+    //     )])
+    //     .alignment(alignment);
+    //
+    //     let content = format!("{}: {}", message.sender_id, message.contents);
+    //     self.messages.push(ListItem::new(content));
+    //     self.list_state
+    //         .borrow_mut()
+    //         .select(Some(self.messages.len() - 1));
+    // }
 
-        let header = Line::from(vec![Span::styled(
-            format!("{}: ", message.sender_id),
-            Style::default().blue(),
-        )])
-        .alignment(alignment);
-
-        let content = format!("{}: {}", message.sender_id, message.contents);
-        self.messages.push(ListItem::new(content));
-        self.state
-            .borrow_mut()
-            .select(Some(self.messages.len() - 1));
-    }
-}
-
-impl Widget for &Messages {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        // TODO: Text wrapping
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&UIServerState>) {
+        // TODO: Text wrapping?
 
         let block = Block::bordered().title(" Messages ");
         let inner_area = block.inner(area);
         block.render(area, buf);
 
-        let list = List::new(self.messages.clone())
-            .highlight_symbol(">> ")
-            .repeat_highlight_symbol(true);
+        if let Some(state) = state
+            // TODO: handle None context
+            && let Some(messages) = state.messages.get(&state.message_context.clone().unwrap())
+        {
+            let list = List::new(messages.iter().map(|message| message.contents.as_str()))
+                .highlight_symbol(">> ")
+                .repeat_highlight_symbol(true);
 
-        let mut state = self.state.borrow_mut();
-        StatefulWidget::render(list, inner_area, buf, &mut state);
+            let mut state = self.list_state.borrow_mut();
+            StatefulWidget::render(list, inner_area, buf, &mut state);
+        }
     }
 }

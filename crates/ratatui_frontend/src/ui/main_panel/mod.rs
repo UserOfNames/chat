@@ -1,13 +1,8 @@
-mod focus;
 mod messages;
 mod sidebar;
 
-use std::net::SocketAddr;
-
-use chat_backend::{SendDestination, SendMessage, client_event::ReceiveMessage};
+use chat_backend::ui_server_state::UIServerState;
 use crossterm::event::{KeyCode, KeyEvent};
-pub use focus::Focus;
-use network_protocol::{ChannelSync, ServerHello, UserSync};
 
 use super::{Action, KeyHandler, popups::commands::CommandsPopup};
 use messages::Messages;
@@ -18,6 +13,13 @@ use ratatui::{
 };
 use sidebar::Sidebar;
 use tui_textarea::TextArea;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Focus {
+    Normal,
+    Input,
+    Sidebar,
+}
 
 /// The main panel, consisting of an input box, a scrollable list of messages, and a sidebar
 /// listing the connection state, channels, and users.
@@ -53,34 +55,20 @@ impl MainPanel {
         self.input = Self::new_textbox();
     }
 
-    /// Update the panel to indicate a new server connection.
-    pub fn connect(&mut self, addr: SocketAddr) {
-        self.sidebar.connected_addr = Some(addr);
-    }
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&UIServerState>) {
+        let [message_part, sidebar] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints(vec![Constraint::Percentage(80), Constraint::Percentage(20)])
+            .areas(area);
 
-    /// Update the panel to indicate that the server has disconnected.
-    pub fn disconnect(&mut self) {
-        self.sidebar.connected_addr = None;
-    }
+        let [messages, input] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints(vec![Constraint::Percentage(75), Constraint::Percentage(25)])
+            .areas(message_part);
 
-    /// Add a new chat message to the panel.
-    pub fn add_message(&mut self, msg: ReceiveMessage) {
-        self.messages.add_message(msg);
-    }
-
-    /// Process the initial `ServerHello` sync.
-    pub fn sync_hello(&mut self, hello: ServerHello) {
-        todo!("");
-    }
-
-    /// Update channel list with a `ChannelSync` from the server.
-    pub fn sync_channels(&mut self, channel_sync: ChannelSync) {
-        todo!("");
-    }
-
-    /// Update user list with a `UserSync` from the server.
-    pub fn sync_users(&mut self, user_sync: UserSync) {
-        todo!("");
+        self.sidebar.render(sidebar, buf, state);
+        self.messages.render(messages, buf, state);
+        self.input.render(input, buf);
     }
 }
 
@@ -93,7 +81,14 @@ impl KeyHandler for MainPanel {
                     Action::None
                 }
 
+                KeyCode::Char('c') | KeyCode::Char('u') => {
+                    self.focus = Focus::Sidebar;
+                    self.sidebar.handle_key(key);
+                    Action::None
+                }
+
                 KeyCode::Esc => Action::PushPopup(CommandsPopup::create()),
+
                 _ => Action::None,
             },
 
@@ -105,11 +100,6 @@ impl KeyHandler for MainPanel {
 
                 KeyCode::Enter => {
                     let message = self.input.lines().join("");
-                    let message = SendMessage {
-                        contents: message,
-                        destination: SendDestination::Channel("General".to_owned()), // TODO: Destination
-                    };
-
                     self.reset_input();
                     Action::SendMessage(message)
                 }
@@ -119,24 +109,16 @@ impl KeyHandler for MainPanel {
                     Action::None
                 }
             },
+
+            Focus::Sidebar => {
+                let action = self.sidebar.handle_key(key);
+                if let Action::YieldFocus = action {
+                    self.focus = Focus::Normal;
+                    Action::None
+                } else {
+                    action
+                }
+            }
         }
-    }
-}
-
-impl Widget for &MainPanel {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let [message_part, sidebar] = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(vec![Constraint::Percentage(80), Constraint::Percentage(20)])
-            .areas(area);
-
-        let [messages, input] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints(vec![Constraint::Percentage(75), Constraint::Percentage(25)])
-            .areas(message_part);
-
-        self.sidebar.render(sidebar, buf);
-        self.messages.render(messages, buf);
-        self.input.render(input, buf);
     }
 }
