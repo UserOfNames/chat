@@ -47,15 +47,13 @@ pub struct FetchChannels;
 impl TryFrom<proto::FetchChannels> for FetchChannels {
     type Error = io::Error;
 
-    fn try_from(value: proto::FetchChannels) -> Result<Self, Self::Error> {
-        let _value = value;
+    fn try_from(_: proto::FetchChannels) -> Result<Self, Self::Error> {
         Ok(Self {})
     }
 }
 
 impl From<FetchChannels> for proto::FetchChannels {
-    fn from(value: FetchChannels) -> Self {
-        let _value = value;
+    fn from(_: FetchChannels) -> Self {
         Self { empty: Some(()) }
     }
 }
@@ -67,15 +65,13 @@ pub struct FetchUsers;
 impl TryFrom<proto::FetchUsers> for FetchUsers {
     type Error = io::Error;
 
-    fn try_from(value: proto::FetchUsers) -> Result<Self, Self::Error> {
-        let _value = value;
+    fn try_from(_: proto::FetchUsers) -> Result<Self, Self::Error> {
         Ok(Self {})
     }
 }
 
 impl From<FetchUsers> for proto::FetchUsers {
-    fn from(value: FetchUsers) -> Self {
-        let _value = value;
+    fn from(_: FetchUsers) -> Self {
         Self { empty: Some(()) }
     }
 }

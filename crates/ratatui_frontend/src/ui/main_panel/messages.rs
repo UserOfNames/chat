@@ -2,14 +2,11 @@
 use std::cell::RefCell;
 
 use ratatui::{
-    layout::Alignment,
     prelude::{Buffer, Rect},
-    style::{Style, Stylize},
-    text::{Line, Span},
     widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use chat_backend::{client_event::ReceivedMessage, ui_server_state::UIServerState};
+use chat_backend::ui_server_state::UIServerState;
 
 #[derive(Debug)]
 pub struct Messages {
