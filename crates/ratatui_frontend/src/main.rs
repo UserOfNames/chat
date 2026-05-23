@@ -253,11 +253,6 @@ impl App {
 
                 let channel_id = channel_id.clone();
 
-                self.send_to_backend(ClientCommand::NetworkCommand(NetworkCommand::JoinChannel(
-                    channel_id.clone(),
-                )))
-                .await;
-
                 if let Some(state) = &mut self.ui_server_state {
                     state.message_context = Some(MessageContext::Channel(channel_id));
                 }

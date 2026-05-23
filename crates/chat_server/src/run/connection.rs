@@ -42,8 +42,8 @@ pub struct Connection {
     /// client.
     event_rx: mpsc::Receiver<NetworkEvent>,
 
-    /// Channels the user has joined.
-    joined_channels: StreamMap<ChannelId, BroadcastStream<NetworkEvent>>,
+    /// Unified receiver stream for all channels on the server.
+    channels: StreamMap<ChannelId, BroadcastStream<NetworkEvent>>,
 
     /// RAII guard to ensure the `Connection` unregisters from the `server_state` when it drops.
     _guard: ConnectionGuard,
@@ -64,9 +64,9 @@ impl Connection {
         client_stream: TcpStream,
     ) {
         let mut user_id = "DEFAULT-".to_owned();
-        
+
         Alphanumeric.append_string(&mut rand::rng(), &mut user_id, 1);
-        while server_state.users.contains_key(&user_id) { 
+        while server_state.users.contains_key(&user_id) {
             Alphanumeric.append_string(&mut rand::rng(), &mut user_id, 1);
         }
 
@@ -89,6 +89,17 @@ impl Connection {
 
         let (event_tx, event_rx) = mpsc::channel(128); // TODO: Buffer size
 
+        // Subscribe to all the server's channels
+        let channels: StreamMap<_, _> = server_state
+            .channels
+            .iter()
+            .map(|pair| {
+                let key = pair.key().clone();
+                let stream = BroadcastStream::from(pair.value().subscribe());
+                (key, stream)
+            })
+            .collect();
+
         // Register this connection in the ServerState
         server_state.users.insert(user_id.clone(), event_tx);
 
@@ -97,7 +108,7 @@ impl Connection {
             server_state,
             client_stream,
             event_rx,
-            joined_channels: StreamMap::new(),
+            channels,
             _guard,
         };
 
@@ -129,7 +140,7 @@ impl Connection {
                     None => todo!(),
                 },
 
-                Some((channel_name, result)) = self.joined_channels.next() => {
+                Some((channel_name, result)) = self.channels.next() => {
                     match result {
                         Ok(msg) => self.send_event_to_client(msg).await,
                         Err(e) => todo!("Log error, report to sender"),
@@ -174,8 +185,6 @@ impl Connection {
             }
 
             NetworkCommand::SendMessage(msg) => self.send_message(msg).await,
-
-            NetworkCommand::JoinChannel(channel_id) => self.join_channel(channel_id).await,
         }
     }
 
@@ -221,15 +230,6 @@ impl Connection {
                     todo!("Log error, report to sender {e}");
                 }
             }
-        }
-    }
-
-    async fn join_channel(&mut self, channel_id: ChannelId) {
-        if let Some(channel) = self.server_state.channels.get(&channel_id) {
-            let receiver = channel.subscribe();
-            self.joined_channels.insert(channel_id, receiver.into());
-        } else {
-            todo!("Log and report error");
         }
     }
 

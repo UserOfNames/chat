@@ -125,9 +125,6 @@ pub enum NetworkCommand {
 
     /// Send the given message.
     SendMessage(SendMessage),
-
-    /// Join a channel with the given ID.
-    JoinChannel(ChannelId),
 }
 
 impl TryFrom<CommandFrame> for NetworkCommand {
@@ -144,8 +141,6 @@ impl TryFrom<CommandFrame> for NetworkCommand {
             Variant::FetchUsers(fetch) => Ok(NetworkCommand::FetchUsers(fetch.try_into()?)),
 
             Variant::SendMessage(message) => Ok(NetworkCommand::SendMessage(message.try_into()?)),
-
-            Variant::JoinChannel(channel) => Ok(NetworkCommand::JoinChannel(channel.try_into()?)),
         }
     }
 }
@@ -169,10 +164,6 @@ impl From<NetworkCommand> for CommandFrame {
 
             NetworkCommand::SendMessage(message) => CommandFrame {
                 variant: Some(Variant::SendMessage(message.into())),
-            },
-
-            NetworkCommand::JoinChannel(channel) => CommandFrame {
-                variant: Some(Variant::JoinChannel(channel.into())),
             },
         }
     }

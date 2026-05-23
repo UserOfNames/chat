@@ -23,7 +23,6 @@ message CommandFrame {
     FetchUsers fetch_users = 3;
 
     SendMessage send_message = 4;
-    ChannelId join_channel = 5;
   }
 }
 
