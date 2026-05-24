@@ -6,10 +6,10 @@ use network_protocol::{
     SendDestination, SendMessage, ServerHello, UserSync, codecs::ServerCodec,
 };
 use rand::distr::{Alphanumeric, SampleString};
-use tokio::{net::TcpStream, sync::mpsc};
+use tokio::{io::AsyncWriteExt, net::TcpStream, sync::mpsc};
 use tokio_rustls::{TlsAcceptor, server::TlsStream};
 use tokio_stream::{StreamMap, wrappers::BroadcastStream};
-use tokio_util::codec::Framed;
+use tokio_util::{codec::Framed, sync::CancellationToken};
 
 use crate::run::{ChannelId, ServerState, UserId};
 
@@ -45,6 +45,9 @@ pub struct Connection {
     /// Unified receiver stream for all channels on the server.
     channels: StreamMap<ChannelId, BroadcastStream<NetworkEvent>>,
 
+    /// Cancellation token for the main task to signal for shutdown.
+    cancellation_token: CancellationToken,
+
     /// RAII guard to ensure the `Connection` unregisters from the `server_state` when it drops.
     _guard: ConnectionGuard,
 }
@@ -62,6 +65,7 @@ impl Connection {
         server_state: Arc<ServerState>,
         tls_acceptor: TlsAcceptor,
         client_stream: TcpStream,
+        cancellation_token: CancellationToken,
     ) {
         let mut user_id = "DEFAULT-".to_owned();
 
@@ -109,6 +113,7 @@ impl Connection {
             client_stream,
             event_rx,
             channels,
+            cancellation_token,
             _guard,
         };
 
@@ -145,6 +150,18 @@ impl Connection {
                         Ok(msg) => self.send_event_to_client(msg).await,
                         Err(e) => todo!("Log error, report to sender"),
                     }
+                }
+
+                () = self.cancellation_token.cancelled() => {
+                    if let Err(e) = self.client_stream.flush().await {
+                        todo!("Log error: failed to flush on shutdown {e}");
+                    }
+
+                    if let Err(e) = self.client_stream.into_inner().shutdown().await {
+                        todo!("Log error: failed to shutdown {e}");
+                    }
+
+                    break;
                 }
             }
         }
@@ -212,7 +229,7 @@ impl Connection {
                 // the Sender side (which is responsible for dropping) is held in the state struct,
                 // which is held by tasks that last for the full duration of the program. So we just
                 // ignore this error.
-                let _ = channel.send(event);
+                let _: Result<_, _> = channel.send(event);
             }
 
             SendDestination::User(user_id) => {

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 
 use crate::run::ServerState;
 
@@ -18,6 +19,9 @@ pub struct Listener {
     /// Cancellation token for the main task to signal for shutdown.
     cancellation_token: CancellationToken,
 
+    /// Task tracker for the main task to join all tasks on shutdown.
+    task_tracker: TaskTracker,
+
     /// Wrapper around a [`ClientConfig`](rustls::ClientConfig) for TLS handshakes.
     tls_acceptor: TlsAcceptor,
 
@@ -29,13 +33,15 @@ impl Listener {
     /// Create a new `Listener`.
     pub fn new(
         server_state: Arc<ServerState>,
+        cancellation_token: CancellationToken,
+        task_tracker: TaskTracker,
         tls_acceptor: TlsAcceptor,
         bind_address: SocketAddr,
-        cancellation_token: CancellationToken,
     ) -> Self {
         Self {
             server_state,
             cancellation_token,
+            task_tracker,
             tls_acceptor,
             bind_address,
         }
@@ -51,10 +57,11 @@ impl Listener {
             tokio::select! {
                 conn = listener.accept() => match conn {
                     Ok((stream, _addr)) => {
-                        tokio::spawn(Connection::start(
+                        self.task_tracker.spawn(Connection::start(
                             self.server_state.clone(),
                             self.tls_acceptor.clone(),
-                            stream
+                            stream,
+                            self.cancellation_token.clone(),
                         ));
                     }
 

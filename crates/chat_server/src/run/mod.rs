@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use shared_utils::first_match;
 use tokio::sync::{broadcast, mpsc};
 use tokio_rustls::TlsAcceptor;
-use tokio_util::sync::CancellationToken;
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use listener::Listener;
 
@@ -85,6 +85,7 @@ struct ChatServer {
     bind_address: SocketAddr,
     tls_acceptor: TlsAcceptor,
     server_state: Arc<ServerState>,
+    task_tracker: TaskTracker,
 }
 
 impl ChatServer {
@@ -120,20 +121,24 @@ impl ChatServer {
             bind_address,
             tls_acceptor,
             server_state,
+            task_tracker: TaskTracker::new(),
         })
     }
 
+    #[allow(unused_mut)]
     async fn run(mut self) -> anyhow::Result<()> {
         let cancellation_token = CancellationToken::new();
 
         let listener = Listener::new(
             self.server_state.clone(),
+            cancellation_token.clone(),
+            self.task_tracker.clone(),
             self.tls_acceptor.clone(),
             self.bind_address,
-            cancellation_token.child_token(),
         );
 
-        let listener_handle = tokio::spawn(listener.start());
+        self.task_tracker
+            .spawn(async move { listener.start().await });
 
         tokio::signal::ctrl_c()
             .await
@@ -141,10 +146,8 @@ impl ChatServer {
 
         cancellation_token.cancel();
 
-        listener_handle
-            .await
-            .context("Waiting for listeners to close")?
-            .context("Listener closed with error")?;
+        self.task_tracker.close();
+        self.task_tracker.wait().await;
 
         Ok(())
     }
