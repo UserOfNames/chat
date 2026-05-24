@@ -9,6 +9,7 @@ undocumented_unsafe_blocks = "warn"
 needless_pass_by_value = "allow"
 new_without_default = "allow"
 explicit_iter_loop = "allow"
+needless_continue = "allow"
 
 [workspace.dependencies]
 anyhow = "1"

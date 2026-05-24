@@ -159,6 +159,12 @@ impl App {
                 self.ui_server_state = None;
             }
 
+            ClientEvent::ServerShutDown => {
+                self.notify("The server shut down.".to_owned(), NoticeLevel::Warning)
+                    .await;
+                self.ui_server_state = None;
+            }
+
             // Remaining events should all be auto-routable to the UIServerState instance. If not,
             // we failed to handle a special case in this match statement.
             _ => {
@@ -173,6 +179,9 @@ impl App {
     async fn handle_client_event_error(&mut self, error: client_event::Error) {
         let message = error.to_string();
         self.notify(message, NoticeLevel::Error).await;
+
+        // If we received an error, we can assume the connection is dead.
+        self.ui_server_state = None;
     }
 
     /// Handle a `Crossterm` event. This forwards to a more specific method.

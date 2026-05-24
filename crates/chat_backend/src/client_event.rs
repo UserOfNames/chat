@@ -34,8 +34,11 @@ pub enum ClientEvent {
     /// Initial state sync, holding basic information about the server connection.
     InitialSync(InitialSync),
 
-    /// Server disconnected.
+    /// Disconnected from the server.
     Disconnected,
+
+    /// Server was shut down while connected.
+    ServerShutDown,
 
     /// Bulk state update for the user list.
     UserSync(UserSync),

@@ -202,21 +202,29 @@ impl ChatBackend {
     /// task. However, if this is not possible (for example, if the frontend expects a synchronous
     /// event loop), one approach is to spawn it in a separate thread using `block_on`, then use
     /// the channels' blocking methods when sending to/receiving from the backend.
+    #[allow(clippy::missing_panics_doc)]
     pub async fn run(mut self) {
         loop {
             tokio::select! {
-                // This structure is a bit odd, but it just makes it so we only listen for network
-                // events if there's an active connection.
-                Some(event_result) = async {
+                event = async {
                     match self.connection.as_mut() {
                         Some(conn) => conn.receive_event().await,
-                        None => None,
+                        None => std::future::pending().await,
                     }
                 } => {
-                    match event_result {
+                    // If the server event is None, the server disconnected from us.
+                    let Some(event) = event else {
+                        self.send_ui_event(ClientEvent::ServerShutDown).await;
+                        self.connection = None;
+                        continue;
+                    };
+
+                    match event {
                         Ok(event) => self.handle_event(event).await,
                         Err(e) => {
                             self.send_ui_error(client_event::Error::Io(e)).await;
+                            self.connection = None;
+                            continue;
                         }
                     }
                 }

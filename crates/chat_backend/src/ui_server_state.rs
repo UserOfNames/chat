@@ -70,6 +70,7 @@ impl UIServerState {
     /// * [`ClientEvent::InitialSync`]: There should only be one [`InitialSync`], which is passed to
     ///   [`Self::new`].
     /// * [`ClientEvent::Disconnected`]: This should result in the total destruction of [`Self`].
+    /// * [`ClientEvent::ServerShutDown`]: This should result in the total destruction of [`Self`].
     pub fn update_from_event(&mut self, event: ClientEvent) {
         match event {
             ClientEvent::InitialSync(sync) => todo!("Log error (should not sync twice)"),
@@ -89,6 +90,7 @@ impl UIServerState {
             ClientEvent::ReceivedMessage(message) => self.push_message(message),
 
             ClientEvent::Disconnected => todo!("Log error (destroy self)"),
+            ClientEvent::ServerShutDown => todo!("Log error (destroy self)"),
         }
     }
 
