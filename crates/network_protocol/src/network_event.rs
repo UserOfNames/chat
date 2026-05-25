@@ -14,7 +14,7 @@ pub type ProtoReceiveDestination = received_message::Destination;
 #[derive(Debug, Clone)]
 pub enum ReceiveDestination {
     /// Message is sent directly to the client.
-    Direct,
+    User(UserId),
 
     /// Message is sent to a channel with the given ID.
     Channel(ChannelId),
@@ -25,7 +25,7 @@ impl TryFrom<ProtoReceiveDestination> for ReceiveDestination {
 
     fn try_from(value: ProtoReceiveDestination) -> Result<Self, Self::Error> {
         Ok(match value {
-            ProtoReceiveDestination::IsDirect(()) => Self::Direct,
+            ProtoReceiveDestination::UserId(id) => Self::User(id.try_into()?),
             ProtoReceiveDestination::ChannelId(id) => Self::Channel(id.try_into()?),
         })
     }
@@ -35,7 +35,7 @@ impl From<ReceiveDestination> for ProtoReceiveDestination {
     fn from(value: ReceiveDestination) -> Self {
         match value {
             ReceiveDestination::Channel(id) => Self::ChannelId(id.into()),
-            ReceiveDestination::Direct => Self::IsDirect(()),
+            ReceiveDestination::User(id) => Self::UserId(id.into()),
         }
     }
 }

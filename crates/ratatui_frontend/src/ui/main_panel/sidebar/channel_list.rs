@@ -43,11 +43,11 @@ impl ChannelList {
             state
                 .channels
                 .iter()
-                .map(|channel| {
-                    if Some(channel) == current_channel {
-                        format!("◉ {channel}")
+                .map(|channel_id| {
+                    if Some(channel_id) == current_channel {
+                        format!("◉ {channel_id}")
                     } else {
-                        channel.clone()
+                        channel_id.clone()
                     }
                 })
                 .collect()

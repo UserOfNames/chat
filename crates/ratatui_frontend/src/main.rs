@@ -227,15 +227,23 @@ impl App {
 
             Action::SendMessage(message) => {
                 let Some(state) = &self.ui_server_state else {
-                    // TODO: Log error - cannot send while disconnected
+                    self.notify(
+                        "Cannot send message: not connected to a server".to_owned(),
+                        NoticeLevel::Error,
+                    )
+                    .await;
                     return;
                 };
 
                 let destination = match &state.message_context {
                     Some(MessageContext::Channel(id)) => SendDestination::Channel(id.clone()),
-                    Some(MessageContext::Direct(id)) => SendDestination::User(id.clone()),
+                    Some(MessageContext::User(id)) => SendDestination::User(id.clone()),
                     None => {
-                        // TODO: Log error - cannot send to None context
+                        self.notify(
+                            "Cannot send message: no user or channel is selected.".to_owned(),
+                            NoticeLevel::Error,
+                        )
+                        .await;
                         return;
                     }
                 };
@@ -253,7 +261,7 @@ impl App {
 
             Action::SelectChannelIndex(i) => {
                 // Selecting a channel when not connected is a NOP.
-                let Some(state) = &self.ui_server_state else {
+                let Some(state) = &mut self.ui_server_state else {
                     return;
                 };
 
@@ -262,11 +270,21 @@ impl App {
                     return;
                 };
 
-                let channel_id = channel_id.clone();
+                state.message_context = Some(MessageContext::Channel(channel_id.clone()));
+            }
 
-                if let Some(state) = &mut self.ui_server_state {
-                    state.message_context = Some(MessageContext::Channel(channel_id));
-                }
+            Action::SelectUserIndex(i) => {
+                // Selecting a user when not connected is a NOP.
+                let Some(state) = &mut self.ui_server_state else {
+                    return;
+                };
+
+                let Some(user_id) = state.users.iter().nth(i) else {
+                    // TODO: Report OOB selection? Shouldn't ever be possible, though, so idk
+                    return;
+                };
+
+                state.message_context = Some(MessageContext::User(user_id.clone()));
             }
 
             Action::YieldFocus => {

@@ -65,6 +65,7 @@ pub struct RunArgs {
 #[derive(Debug)]
 struct ServerState {
     default_channel_id: Option<ChannelId>,
+    global_broadcast: broadcast::Sender<NetworkEvent>,
     channels: DashMap<ChannelId, broadcast::Sender<NetworkEvent>>,
     users: DashMap<UserId, mpsc::Sender<NetworkEvent>>,
 }
@@ -74,6 +75,7 @@ impl ServerState {
     fn new(default_channel_id: Option<ChannelId>) -> Self {
         Self {
             default_channel_id,
+            global_broadcast: broadcast::channel(128).0, // TODO: Buffer size
             channels: DashMap::new(),
             users: DashMap::new(),
         }

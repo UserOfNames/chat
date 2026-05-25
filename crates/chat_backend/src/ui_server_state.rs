@@ -9,7 +9,7 @@ use crate::client_event::{ClientEvent, InitialSync};
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum MessageContext {
     Channel(ChannelId),
-    Direct(UserId),
+    User(UserId),
 }
 
 /// State struct holding information about the current connection, such as the address of the
@@ -97,7 +97,14 @@ impl UIServerState {
     /// Add a new message to a message list.
     fn push_message(&mut self, message: ReceivedMessage) {
         let context = match message.destination {
-            ReceiveDestination::Direct => MessageContext::Direct(message.sender_id.clone()),
+            // If we sent the message, its context is the destination.
+            ReceiveDestination::User(ref id) if message.sender_id == self.your_id => {
+                MessageContext::User(id.clone())
+            }
+
+            // Otherwise, the context is the sender.
+            ReceiveDestination::User(_) => MessageContext::User(message.sender_id.clone()),
+
             ReceiveDestination::Channel(ref channel) => MessageContext::Channel(channel.clone()),
         };
 

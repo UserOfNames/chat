@@ -6,7 +6,11 @@ use network_protocol::{
     SendDestination, SendMessage, ServerHello, UserSync, codecs::ServerCodec,
 };
 use rand::distr::{Alphanumeric, SampleString};
-use tokio::{io::AsyncWriteExt, net::TcpStream, sync::mpsc};
+use tokio::{
+    io::AsyncWriteExt,
+    net::TcpStream,
+    sync::{broadcast, mpsc},
+};
 use tokio_rustls::{TlsAcceptor, server::TlsStream};
 use tokio_stream::{StreamMap, wrappers::BroadcastStream};
 use tokio_util::{codec::Framed, sync::CancellationToken};
@@ -23,6 +27,14 @@ struct ConnectionGuard {
 impl Drop for ConnectionGuard {
     fn drop(&mut self) {
         self.server_state.users.remove(&self.user_id);
+
+        // The only failure condition for sending through a broadcast channel is if there are no
+        // receivers, but we don't actually care if nobody gets this message. As such, we ignore
+        // this error.
+        let _: Result<_, _> = self
+            .server_state
+            .global_broadcast
+            .send(NetworkEvent::UserLeft(self.user_id.clone()));
     }
 }
 
@@ -37,6 +49,9 @@ pub struct Connection {
 
     /// Stream of commands coming from the client, or sending back to the client.
     client_stream: Framed<TlsStream<TcpStream>, ServerCodec>,
+
+    /// Channel for events broadcast to all users on the server.
+    global_event_rx: broadcast::Receiver<NetworkEvent>,
 
     /// Channel for events coming from elsewhere on the server. Typically outbound towards the
     /// client.
@@ -81,7 +96,26 @@ impl Connection {
                 return;
             }
         };
-        let client_stream = Framed::new(client_stream, ServerCodec);
+        let mut client_stream = Framed::new(client_stream, ServerCodec);
+
+        // We want to finish the ClientHello -> ServerHello handshake before anything else
+        // This match is just a guard clause, verifying that we get what we need
+        match client_stream.next().await {
+            Some(Ok(NetworkCommand::ClientHello)) => {}
+            Some(Ok(other)) => todo!("Log error: bad handshake: unexpected command {other:?}"),
+            Some(Err(e)) => todo!("Log error: bad handshake: error {e}"),
+            None => todo!("Log error: bad handshake: stream closed"),
+        }
+
+        if let Err(e) = client_stream
+            .send(NetworkEvent::ServerHello(ServerHello {
+                your_id: user_id.clone(),
+                default_channel_id: server_state.default_channel_id.clone(),
+            }))
+            .await
+        {
+            todo!("Log error: error sending ServerHello: {e}");
+        }
 
         // It's important that we create the guard before registering, or else there is a gap
         // between when the connection is registered and when the guard is active
@@ -107,10 +141,23 @@ impl Connection {
         // Register this connection in the ServerState
         server_state.users.insert(user_id.clone(), event_tx);
 
+        // Notify all other users that you've joined. The only failure condition for sending through
+        // a broadcast channel is if there are no receivers, but we don't actually care if nobody
+        // gets this message. As such, we ignore this error.
+        let _: Result<_, _> = server_state
+            .global_broadcast
+            .send(NetworkEvent::UserJoined(user_id.clone()));
+
+        // Subscribe to the global broadcast channel. We do this AFTER sending the join notification
+        // because the client doesn't need to be reminded that they connected (they already know
+        // that).
+        let global_broadcast_rx = server_state.global_broadcast.subscribe();
+
         let connection = Self {
             user_id,
             server_state,
             client_stream,
+            global_event_rx: global_broadcast_rx,
             event_rx,
             channels,
             cancellation_token,
@@ -128,6 +175,7 @@ impl Connection {
     async fn run(mut self) {
         loop {
             tokio::select! {
+                // Commands from the client.
                 network_cmd = self.client_stream.next() => match network_cmd {
                     Some(cmd) => match cmd {
                         Ok(cmd) => self.handle_command(cmd).await,
@@ -140,11 +188,19 @@ impl Connection {
                     }
                 },
 
+                // Global events.
+                event = self.global_event_rx.recv() => match event {
+                    Ok(event) => self.send_event_to_client(event).await,
+                    Err(e) => todo!("Log error receiving global event: {e}"),
+                },
+
+                // Direct messages.
                 direct_msg = self.event_rx.recv() => match direct_msg {
                     Some(msg) => self.send_event_to_client(msg).await,
                     None => todo!(),
                 },
 
+                // Channel messages.
                 Some((channel_name, result)) = self.channels.next() => {
                     match result {
                         Ok(msg) => self.send_event_to_client(msg).await,
@@ -152,6 +208,7 @@ impl Connection {
                     }
                 }
 
+                // Cancellation signal.
                 () = self.cancellation_token.cancelled() => {
                     if let Err(e) = self.client_stream.flush().await {
                         todo!("Log error: failed to flush on shutdown {e}");
@@ -169,13 +226,7 @@ impl Connection {
 
     async fn handle_command(&mut self, command: NetworkCommand) {
         match command {
-            NetworkCommand::ClientHello => {
-                self.send_event_to_client(NetworkEvent::ServerHello(ServerHello {
-                    your_id: self.user_id.clone(),
-                    default_channel_id: self.server_state.default_channel_id.clone(),
-                }))
-                .await;
-            }
+            NetworkCommand::ClientHello => todo!("Log error: double hello"),
 
             NetworkCommand::FetchChannels(fetch) => {
                 self.send_event_to_client(NetworkEvent::ChannelSync(ChannelSync {
@@ -232,26 +283,37 @@ impl Connection {
                 let _: Result<_, _> = channel.send(event);
             }
 
-            SendDestination::User(user_id) => {
-                let Some(user) = self.server_state.users.get(&user_id) else {
+            SendDestination::User(target_user_id) => {
+                let Some(user) = self.server_state.users.get(&target_user_id) else {
                     todo!("Log error, report to sender");
                 };
 
                 let event = NetworkEvent::ReceivedMessage(ReceivedMessage {
                     contents,
                     sender_id: self.user_id.clone(),
-                    destination: ReceiveDestination::Direct,
+                    destination: ReceiveDestination::User(target_user_id.clone()),
                 });
 
-                if let Err(e) = user.send(event).await {
+                if let Err(e) = user.send(event.clone()).await {
                     todo!("Log error, report to sender {e}");
+                }
+
+                // Can't use send_event_to_client here due to a borrow checker conflict.
+                // We send back to the sender as well to include them in the loopback, such that
+                // they can render their own message in the correct order relative to other messages.
+                // However, if the sender is sending to themselves (a "note to self"), this would
+                // result in a double send. As such, we filter that case out.
+                if target_user_id != self.user_id
+                    && let Err(e) = self.client_stream.send(event).await
+                {
+                    todo!("Log error: sender disconnected while sending DM {e}");
                 }
             }
         }
     }
 
-    async fn send_event_to_client(&mut self, message: NetworkEvent) {
-        if let Err(e) = self.client_stream.send(message).await {
+    async fn send_event_to_client(&mut self, event: NetworkEvent) {
+        if let Err(e) = self.client_stream.send(event).await {
             todo!("Log error, report to sender");
         }
     }

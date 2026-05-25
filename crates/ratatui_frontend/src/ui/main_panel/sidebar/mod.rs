@@ -72,7 +72,7 @@ impl KeyHandler for Sidebar {
                 }
 
                 KeyCode::Char('u') => {
-                    self.focus = Focus::Channels;
+                    self.focus = Focus::Users;
                     Action::None
                 }
 
@@ -109,7 +109,30 @@ impl KeyHandler for Sidebar {
             },
 
             Focus::Users => match key.code {
-                _ => todo!(),
+                KeyCode::Esc => {
+                    self.focus = Focus::Unfocused;
+                    Action::YieldFocus
+                }
+
+                KeyCode::Char('k') | KeyCode::Up => {
+                    self.user_list.scroll_up();
+                    Action::None
+                }
+
+                KeyCode::Char('j') | KeyCode::Down => {
+                    self.user_list.scroll_down();
+                    Action::None
+                }
+
+                KeyCode::Enter => {
+                    let Some(i) = self.user_list.select() else {
+                        return Action::None;
+                    };
+
+                    Action::SelectUserIndex(i)
+                }
+
+                _ => Action::None,
             },
         }
     }

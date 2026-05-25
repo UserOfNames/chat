@@ -16,6 +16,7 @@ pub enum Action {
     YieldFocus,
 
     SelectChannelIndex(usize),
+    SelectUserIndex(usize),
 }
 
 pub trait KeyHandler {

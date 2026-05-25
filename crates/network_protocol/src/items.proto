@@ -74,7 +74,7 @@ message ReceivedMessage {
   UserId sender_id = 2;
 
   oneof destination {
-    google.protobuf.Empty is_direct = 3;
+    UserId user_id = 3;
     ChannelId channel_id = 4;
   }
 }
