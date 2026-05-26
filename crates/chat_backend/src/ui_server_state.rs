@@ -18,7 +18,7 @@ pub enum MessageContext {
 /// Includes a helper method to easily update the state using [`ClientEvent`]s.
 ///
 /// Note that a UI is free to implement its own state handling based on [`ClientEvent`]s if desired.
-/// This is provided for convenience, as a reasonable default implementaion.
+/// This is provided for convenience, as a reasonable default implementation.
 #[derive(Debug)]
 pub struct UIServerState {
     /// Your user ID for the session. If this is `None`, it means the backend has not synced the

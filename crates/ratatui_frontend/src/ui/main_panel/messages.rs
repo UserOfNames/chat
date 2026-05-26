@@ -1,61 +1,68 @@
-// TODO: Rework in light of channel implementation
-use std::cell::RefCell;
-
 use ratatui::{
-    prelude::{Buffer, Rect},
+    buffer::Buffer,
+    layout::Rect,
+    style::Style,
+    text::{Line, Text},
     widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use chat_backend::ui_server_state::UIServerState;
+use chat_backend::{client_event::ReceivedMessage, ui_server_state::UIServerState};
 
 #[derive(Debug)]
 pub struct Messages {
-    messages: Vec<ListItem<'static>>,
-    list_state: RefCell<ListState>,
+    list_state: ListState,
 }
 
 impl Messages {
     pub fn new() -> Self {
         Self {
-            messages: Vec::new(),
-            list_state: RefCell::new(ListState::default()),
+            list_state: ListState::default(),
         }
     }
 
-    // pub fn add_message(&mut self, message: ReceivedMessage) {
-    //     // TODO: Align right if you're the sender
-    //     let alignment = Alignment::Left;
-    //
-    //     let header = Line::from(vec![Span::styled(
-    //         format!("{}: ", message.sender_id),
-    //         Style::default().blue(),
-    //     )])
-    //     .alignment(alignment);
-    //
-    //     let content = format!("{}: {}", message.sender_id, message.contents);
-    //     self.messages.push(ListItem::new(content));
-    //     self.list_state
-    //         .borrow_mut()
-    //         .select(Some(self.messages.len() - 1));
-    // }
-
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&UIServerState>) {
-        // TODO: Text wrapping?
-
         let block = Block::bordered().title(" Messages ");
         let inner_area = block.inner(area);
         block.render(area, buf);
 
         if let Some(state) = state
-            // TODO: handle None context
-            && let Some(messages) = state.messages.get(&state.message_context.clone().unwrap())
+            && let Some(context) = &state.message_context
+            && let Some(messages) = state.messages.get(context)
         {
-            let list = List::new(messages.iter().map(|message| message.contents.as_str()))
-                .highlight_symbol(">> ")
-                .repeat_highlight_symbol(true);
+            let items: Vec<ListItem> = messages
+                .iter()
+                .map(|msg| self.build_message_item(msg, state, inner_area.width))
+                .collect();
 
-            let mut state = self.list_state.borrow_mut();
-            StatefulWidget::render(list, inner_area, buf, &mut state);
+            let list = List::new(items).highlight_style(Style::new().reversed());
+            StatefulWidget::render(list, inner_area, buf, &mut self.list_state);
         }
+    }
+
+    fn build_message_item<'a>(
+        &self,
+        message: &'a ReceivedMessage,
+        state: &'a UIServerState,
+        max_width: u16,
+    ) -> ListItem<'a> {
+        let header_style = if message.sender_id == state.your_id {
+            Style::new().green()
+        } else {
+            Style::new().blue()
+        };
+
+        let header = Line::styled(&message.sender_id, header_style);
+
+        let wrapped_contents: Vec<Line> = textwrap::wrap(&message.contents, max_width as usize)
+            .into_iter()
+            .map(Line::from)
+            .collect();
+
+        let content: Vec<_> = std::iter::once(header)
+            .chain(wrapped_contents)
+            .chain(std::iter::once(Line::raw(""))) // Add a line between each message
+            .collect();
+
+        ListItem::new(Text::from(content))
     }
 }
