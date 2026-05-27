@@ -287,9 +287,8 @@ impl App {
                 state.message_context = Some(MessageContext::User(user_id.clone()));
             }
 
-            Action::YieldFocus => {
-                unreachable!("This is always handled further up the call hierarchy");
-            }
+            // Yielding at the top-level focus is a NOP
+            Action::YieldFocus => {}
         }
     }
 

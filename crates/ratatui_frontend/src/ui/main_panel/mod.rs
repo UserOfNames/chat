@@ -16,7 +16,7 @@ use tui_textarea::TextArea;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
-    Normal,
+    None,
     Input,
     Sidebar,
 }
@@ -35,7 +35,7 @@ impl MainPanel {
     /// Create a new `MainPanel`.
     pub fn new() -> Self {
         Self {
-            focus: Focus::Normal,
+            focus: Focus::None,
             input: Self::new_textbox(),
             messages: Messages::new(),
             sidebar: Sidebar::new(),
@@ -75,7 +75,7 @@ impl MainPanel {
 impl KeyHandler for MainPanel {
     fn handle_key(&mut self, key: KeyEvent) -> super::Action {
         match self.focus {
-            Focus::Normal => match key.code {
+            Focus::None => match key.code {
                 KeyCode::Char('i') => {
                     self.focus = Focus::Input;
                     Action::None
@@ -94,7 +94,7 @@ impl KeyHandler for MainPanel {
 
             Focus::Input => match key.code {
                 KeyCode::Esc => {
-                    self.focus = Focus::Normal;
+                    self.focus = Focus::None;
                     Action::None
                 }
 
@@ -113,11 +113,10 @@ impl KeyHandler for MainPanel {
             Focus::Sidebar => {
                 let action = self.sidebar.handle_key(key);
                 if let Action::YieldFocus = action {
-                    self.focus = Focus::Normal;
-                    Action::None
-                } else {
-                    action
+                    self.focus = Focus::None;
                 }
+
+                action
             }
         }
     }

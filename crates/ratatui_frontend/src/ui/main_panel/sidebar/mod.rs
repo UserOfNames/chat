@@ -47,7 +47,7 @@ impl Sidebar {
 
         outer_block.render(area, buf);
 
-        let [connection, channels_area, users_area] = Layout::default()
+        let [connection_area, channels_area, users_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![
                 Constraint::Percentage(10),
@@ -56,7 +56,7 @@ impl Sidebar {
             ])
             .areas(inner_area);
 
-        self.connection_status.render(connection, buf, state);
+        self.connection_status.render(connection_area, buf, state);
         self.channel_list.render(channels_area, buf, state);
         self.user_list.render(users_area, buf, state);
     }
