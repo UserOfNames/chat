@@ -57,8 +57,10 @@ impl Sidebar {
             .areas(inner_area);
 
         self.connection_status.render(connection_area, buf, state);
-        self.channel_list.render(channels_area, buf, state);
-        self.user_list.render(users_area, buf, state);
+        self.channel_list
+            .render(channels_area, buf, state, self.focus == Focus::Channels);
+        self.user_list
+            .render(users_area, buf, state, self.focus == Focus::Users);
     }
 }
 

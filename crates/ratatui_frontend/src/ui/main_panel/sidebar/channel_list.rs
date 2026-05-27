@@ -2,7 +2,7 @@ use chat_backend::ui_server_state::{MessageContext, UIServerState};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
-    style::{Color, Style},
+    style::Style,
     widgets::{Block, Borders, List, ListState, StatefulWidget},
 };
 
@@ -31,7 +31,13 @@ impl ChannelList {
         self.list_state.selected()
     }
 
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&UIServerState>) {
+    pub fn render(
+        &mut self,
+        area: Rect,
+        buf: &mut Buffer,
+        state: Option<&UIServerState>,
+        focused: bool,
+    ) {
         let channels_list: Vec<String> = if let Some(state) = state {
             let current_channel = if let Some(MessageContext::Channel(id)) = &state.message_context
             {
@@ -59,14 +65,27 @@ impl ChannelList {
             self.list_state.select_first();
         }
 
+        let border_style = if focused {
+            Style::default().green()
+        } else {
+            Style::default()
+        };
+
+        let highlight_style = if focused {
+            Style::default().green()
+        } else {
+            Style::default()
+        };
+
         let channels_list = List::new(channels_list)
             .block(
                 Block::default()
                     .borders(Borders::TOP)
                     .title(" Channels ")
-                    .title_alignment(Alignment::Center),
+                    .title_alignment(Alignment::Center)
+                    .border_style(border_style),
             )
-            .highlight_style(Style::default().fg(Color::Green));
+            .highlight_style(highlight_style);
 
         StatefulWidget::render(channels_list, area, buf, &mut self.list_state);
     }

@@ -2,11 +2,14 @@ use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::Style,
-    text::{Line, Text},
+    text::{Line, Span, Text},
     widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use chat_backend::{client_event::ReceivedMessage, ui_server_state::UIServerState};
+use chat_backend::{
+    client_event::ReceivedMessage,
+    ui_server_state::{MessageContext, UIServerState},
+};
 
 #[derive(Debug)]
 pub struct Messages {
@@ -21,7 +24,13 @@ impl Messages {
     }
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&UIServerState>) {
-        let block = Block::bordered().title(" Messages ");
+        let title = match state.and_then(|state| state.message_context.as_ref()) {
+            Some(MessageContext::Channel(id)) => format!(" Channel: {id} "),
+            Some(MessageContext::User(id)) => format!(" User: {id} "),
+            None => " Messages ".to_owned(),
+        };
+
+        let block = Block::bordered().title(title);
         let inner_area = block.inner(area);
         block.render(area, buf);
 

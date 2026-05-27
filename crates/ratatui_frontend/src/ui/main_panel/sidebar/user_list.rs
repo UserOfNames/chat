@@ -2,7 +2,7 @@ use chat_backend::ui_server_state::{MessageContext, UIServerState};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
-    style::{Color, Style},
+    style::Style,
     widgets::{Block, Borders, List, ListState, StatefulWidget},
 };
 
@@ -31,7 +31,13 @@ impl UserList {
         self.list_state.selected()
     }
 
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&UIServerState>) {
+    pub fn render(
+        &mut self,
+        area: Rect,
+        buf: &mut Buffer,
+        state: Option<&UIServerState>,
+        focused: bool,
+    ) {
         let users_list: Vec<String> = if let Some(state) = state {
             let selected_user = if let Some(MessageContext::User(id)) = &state.message_context {
                 Some(id)
@@ -58,14 +64,27 @@ impl UserList {
             self.list_state.select_first();
         }
 
+        let border_style = if focused {
+            Style::default().green()
+        } else {
+            Style::default()
+        };
+
+        let highlight_style = if focused {
+            Style::default().green()
+        } else {
+            Style::default()
+        };
+
         let users_list = List::new(users_list)
             .block(
                 Block::default()
                     .borders(Borders::TOP)
                     .title(" Users ")
-                    .title_alignment(Alignment::Center),
+                    .title_alignment(Alignment::Center)
+                    .border_style(border_style),
             )
-            .highlight_style(Style::default().fg(Color::Green));
+            .highlight_style(highlight_style);
 
         StatefulWidget::render(users_list, area, buf, &mut self.list_state);
     }

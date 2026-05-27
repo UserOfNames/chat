@@ -9,6 +9,7 @@ use messages::Messages;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
     widgets::{Block, Widget},
 };
 use sidebar::Sidebar;
@@ -66,9 +67,36 @@ impl MainPanel {
             .constraints(vec![Constraint::Percentage(75), Constraint::Percentage(25)])
             .areas(message_part);
 
+        self.set_widget_styles();
+
         self.sidebar.render(sidebar, buf, state);
         self.messages.render(messages, buf, state);
         self.input.render(input, buf);
+    }
+
+    /// Helper to set the styles of widgets owned by the `MainPanel` based on the current
+    /// application state.
+    fn set_widget_styles(&mut self) {
+        let border_style = if self.focus == Focus::Input {
+            Style::default().green()
+        } else {
+            Style::default()
+        };
+        self.input.set_block(
+            Block::bordered()
+                .title(" Input ")
+                .border_style(border_style),
+        );
+
+        let cursor_style = if self.focus == Focus::Input {
+            Style::default().reversed()
+        } else {
+            Style::default().hidden()
+        };
+        self.input.set_cursor_style(cursor_style);
+
+        // NOTE: If I ever implement newlines in messages, it's worth considering removing this.
+        self.input.set_cursor_line_style(Style::default());
     }
 }
 
