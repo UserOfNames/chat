@@ -1,5 +1,6 @@
 mod ca_certs;
 mod config;
+mod pki;
 mod server_certs;
 
 use std::fs::create_dir_all;
@@ -15,6 +16,7 @@ use server_certs::{InitServerCertsArgs, init_server_certs};
 use tempfile::NamedTempFile;
 
 use crate::DefaultPaths;
+use crate::init::pki::{InitPkiArgs, init_pki};
 
 #[derive(Debug, Subcommand, Serialize, Deserialize)]
 pub enum InitMode {
@@ -23,6 +25,10 @@ pub enum InitMode {
 
     /// Initialize a root CA certificate and key
     CaCerts(InitCACertsArgs),
+
+    /// Initialize your own PKI: root CA certificate and key file, and signed certificates to go
+    /// with them
+    Pki(InitPkiArgs),
 
     /// Initialize a CA-signed private key and certificate for TLS
     ServerCerts(InitServerCertsArgs),
@@ -82,6 +88,7 @@ pub fn main(default_paths: Option<DefaultPaths>, mode: InitMode) -> anyhow::Resu
     match mode {
         InitMode::Config(args) => init_config(default_paths, args),
         InitMode::CaCerts(args) => init_ca_certs(default_paths, args),
+        InitMode::Pki(args) => init_pki(default_paths, args),
         InitMode::ServerCerts(args) => init_server_certs(default_paths, args),
     }
 }

@@ -20,14 +20,14 @@ use rustls::{
     pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
 };
 use serde::{Deserialize, Serialize};
-use shared_utils::first_match;
+use shared_utils::{TildeRelativePathBuf, first_match};
 use tokio::sync::{broadcast, mpsc};
 use tokio_rustls::TlsAcceptor;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use listener::Listener;
 
-use crate::{Config, DEFAULT_CONFIG, DefaultPaths, ENV_VAR_PREFIX};
+use crate::{DEFAULT_CONFIG, DefaultPaths, ENV_VAR_PREFIX};
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct RunArgs {
@@ -59,6 +59,25 @@ pub struct RunArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long, value_name = "PATH")]
     channel_ids: Option<Vec<ChannelId>>,
+}
+
+/// Configuration for the server runtime.
+#[derive(Debug, Serialize, Deserialize)]
+struct Config {
+    /// Host address the listener task binds to.
+    listener_ip: IpAddr,
+
+    /// Port the listener task binds to.
+    listener_port: u16,
+
+    /// Path to the TLS certificate file.
+    tls_cert_path: TildeRelativePathBuf,
+
+    /// Path to the TLS private key file associated with the certificate.
+    tls_key_path: TildeRelativePathBuf,
+
+    /// List of all the channel IDs on the server.
+    channel_ids: Vec<ChannelId>,
 }
 
 /// State shared between all tasks.
@@ -94,15 +113,23 @@ impl ChatServer {
     fn new(config: Config) -> anyhow::Result<Self> {
         let bind_address = SocketAddr::new(config.listener_ip, config.listener_port);
 
-        let cert_path_display = config.tls_cert_path.display();
-        let certs = CertificateDer::pem_file_iter(&config.tls_cert_path)
-            .with_context(|| format!("Opening TLS certificate file '{cert_path_display}'"))?
+        let cert_path_err_display = config.tls_cert_path.original().display();
+        let tls_cert_path = &config
+            .tls_cert_path
+            .resolved()
+            .context("Resolving TLS key path")?;
+        let certs = CertificateDer::pem_file_iter(tls_cert_path)
+            .with_context(|| format!("Opening TLS certificate file '{cert_path_err_display}'"))?
             .collect::<Result<Vec<_>, _>>()
-            .with_context(|| format!("Reading TLS certificate file '{cert_path_display}'"))?;
+            .with_context(|| format!("Reading TLS certificate file '{cert_path_err_display}'"))?;
 
-        let key_path_display = config.tls_key_path.display();
-        let key = PrivateKeyDer::from_pem_file(&config.tls_key_path)
-            .with_context(|| format!("Reading TLS key file '{key_path_display}'"))?;
+        let key_path_err_display = config.tls_key_path.original().display();
+        let tls_key_path = &config
+            .tls_key_path
+            .resolved()
+            .context("Resolving TLS key path")?;
+        let key = PrivateKeyDer::from_pem_file(tls_key_path)
+            .with_context(|| format!("Reading TLS key file '{key_path_err_display}'"))?;
 
         let tls_config = ServerConfig::builder()
             .with_no_client_auth()

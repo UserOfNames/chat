@@ -36,12 +36,12 @@ pub fn init_config(
     .context("Resolving config file path")?;
 
     if args.dry_run {
-        println!("{}", config_path.display());
+        println!("Config path: {}", config_path.display());
         return Ok(());
     }
 
     let paramses = &[WriteParams {
-        path: &config_path,
+        path: config_path,
         contents: DEFAULT_CONFIG.to_owned(),
         force: args.force,
         mode: None,

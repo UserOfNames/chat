@@ -46,7 +46,8 @@ pub fn init_ca_certs(
     .context("Resolving output path for private key file")?;
 
     if args.dry_run {
-        todo!();
+        println!("CA cert path: '{}'", output_cert_path.display());
+        println!("CA key path: '{}'", output_key_path.display());
     }
 
     let signing_key = KeyPair::generate().context("Generating keypair")?;
@@ -63,18 +64,29 @@ pub fn init_ca_certs(
 
     let paramses = &[
         WriteParams {
-            path: &output_key_path,
+            path: output_key_path,
             contents: key_pem,
             force: args.force,
             mode: Some(0o400),
         },
         WriteParams {
-            path: &output_cert_path,
+            path: output_cert_path,
             contents: cert_pem,
             force: args.force,
             mode: None,
         },
     ];
 
-    write_with_params(paramses).context("Saving output files")
+    write_with_params(paramses).context("Saving output files")?;
+
+    println!(
+        "CA private key initialized at '{}'",
+        output_key_path.display()
+    );
+    println!(
+        "CA private key initialized at '{}'",
+        output_cert_path.display()
+    );
+
+    Ok(())
 }

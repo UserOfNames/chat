@@ -1,10 +1,12 @@
 mod ui;
 
-use std::io;
+use std::{io, path::PathBuf};
 
+use clap::Parser;
 use crossterm::event::{Event, EventStream, KeyEvent, KeyEventKind};
 use futures::StreamExt;
 use ratatui::{DefaultTerminal, Frame, widgets::Clear};
+use shared_utils::NamedProjectDirs;
 use thiserror::Error;
 use tokio::{
     sync::mpsc::{Receiver, Sender},
@@ -28,6 +30,18 @@ use ui::{
         popup_area,
     },
 };
+
+/// Ratatui client UI.
+#[derive(Parser)]
+struct Args {
+    /// Print the default config file path and exit
+    #[arg(long)]
+    get_default_config_path: bool,
+
+    /// Override the default config file path
+    #[arg(long)]
+    config_path: Option<PathBuf>,
+}
 
 #[derive(Debug, Error)]
 enum AppError {
@@ -312,10 +326,46 @@ impl App {
     }
 }
 
+#[derive(Debug)]
+struct DefaultPaths {
+    config: PathBuf,
+}
+
+impl DefaultPaths {
+    /// Initialize a `BackendPaths` instance with default paths.
+    ///
+    /// `config`: `NamedProjectDirs::config_dir()/config.toml`
+    fn defaults(component: impl Into<PathBuf>) -> Option<Self> {
+        let base = NamedProjectDirs::new(component)?;
+
+        let config = base.config_dir().join("config.toml");
+
+        Some(Self { config })
+    }
+}
+
 #[tokio::main]
 async fn main() -> AppResult {
-    // TODO: Path override
-    let (backend, handle) = match ChatBackend::new(None) {
+    let args = Args::parse();
+
+    // HACK: We're dealing with backend information in the frontend. This is because the backend is
+    // not currently a standalone binary. If we ever daemonize the backend, this should be moved
+    // there, to its own arg parsing.
+    if args.get_default_config_path {
+        let default_paths = DefaultPaths::defaults("client");
+
+        println!(
+            "Config path: {}",
+            default_paths
+                .expect("Could not resolve default config path")
+                .config
+                .display()
+        );
+
+        return Ok(());
+    }
+
+    let (backend, handle) = match ChatBackend::new(args.config_path) {
         Ok((b, h)) => (b, h),
         Err(e) => {
             eprintln!("{e}");

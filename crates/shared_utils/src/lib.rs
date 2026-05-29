@@ -1,6 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::{env::home_dir, io, path::{Component, Path, PathBuf}};
 
 use directories::ProjectDirs;
+use figment::value::magic::RelativePathBuf;
+use serde::{Deserialize, Serialize};
 
 /// Attempt to match a series of bindings against patterns and return the first match.
 #[macro_export]
@@ -77,5 +79,58 @@ impl NamedProjectDirs {
     #[must_use]
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
+    }
+}
+
+/// Abstraction over [`RelativePathBuf`](figment::value::magic::RelativePathBuf) that expands
+/// leading tildes (`~`s) into the user's home directory.
+///
+/// This does not handle any additional shell expansion features.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TildeRelativePathBuf(RelativePathBuf);
+
+impl TildeRelativePathBuf {
+    /// Return the resolved (tilde-expanded, relative) path.
+    ///
+    /// # Errors
+    /// * [`io::ErrorKind::NotFound`]: could not find the user's home directory
+    pub fn resolved(&self) -> io::Result<PathBuf> {
+        match Self::expand_leading_tilde(self.0.original()) {
+            Some(Ok(path)) => Ok(path),
+            Some(Err(e)) => Err(e),
+            None => Ok(self.0.relative()),
+        }
+    }
+
+    /// Return the inner [`RelativePathBuf::original()`].
+    #[must_use]
+    pub fn original(&self) -> &Path {
+        self.0.original()
+    }
+
+    /// Internal helper function to expand a leading tilde, if present. Returns `None` if no
+    /// expansion occurred.
+    ///
+    /// # Errors
+    /// * [`io::ErrorKind::NotFound`]: could not find the user's home directory
+    fn expand_leading_tilde(path: impl AsRef<Path>) -> Option<io::Result<PathBuf>> {
+        let path = path.as_ref();
+
+        let mut components = path.components();
+
+        if let Some(Component::Normal(first)) = components.next()
+            && first == "~"
+        {
+            let Some(home_dir) = home_dir() else {
+                return Some(Err(io::Error::new(io::ErrorKind::NotFound, "Home directory failed to resolve")));
+            };
+
+            let remainder = components.as_path();
+
+            return Some(Ok(home_dir.join(remainder)));
+        }
+
+        None
     }
 }

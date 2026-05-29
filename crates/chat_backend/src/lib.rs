@@ -27,7 +27,7 @@ use rustls::{
     },
 };
 use serde::{Deserialize, Serialize};
-use shared_utils::{NamedProjectDirs, first_match};
+use shared_utils::{NamedProjectDirs, TildeRelativePathBuf, first_match};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
@@ -56,6 +56,10 @@ pub enum InitError {
     /// [`rustls::RootCertStore`].
     #[error("Certificate validation failed: {0}")]
     CertValidationFailed(#[from] rustls::Error),
+
+    /// An [`io::Error`] occurred.
+    #[error("IO error: {0}")]
+    Io(#[from] io::Error),
 }
 
 impl From<figment::Error> for InitError {
@@ -88,7 +92,7 @@ struct Config {
     /// Whether to include common PKI root certificates (default: true)
     include_webpki_roots: bool,
     /// Paths to additional root certificates (default: empty)
-    additional_root_ca_paths: Vec<PathBuf>,
+    additional_root_ca_paths: Vec<TildeRelativePathBuf>,
 }
 
 /// Contains channels through which to send `ClientCommand`s to the backend and from which to
@@ -98,6 +102,7 @@ pub struct BackendHandle {
     /// Sender for `ClientCommand`s.
     pub cmd_tx: Sender<ClientCommand>,
     /// Receiver of `ClientEvent`s.
+
     pub event_rx: Receiver<client_event::Result>,
 }
 
@@ -127,7 +132,6 @@ impl ChatBackend {
     /// # Errors
     /// See [`InitError`] for all possible errors from this function.
     pub fn new(config_path_override: Option<PathBuf>) -> Result<(Self, BackendHandle), InitError> {
-        // TODO: error handling
         let default_paths = DefaultPaths::defaults("client");
 
         let config_path = first_match! {
@@ -165,9 +169,9 @@ impl ChatBackend {
         }
 
         for path in config.additional_root_ca_paths {
-            let cert = CertificateDer::from_pem_file(&path).map_err(|e| {
+            let cert = CertificateDer::from_pem_file(path.resolved()?).map_err(|e| {
                 InitError::CertFileReadFailed {
-                    path: path.clone(),
+                    path: path.original().to_owned(),
                     source: e,
                 }
             })?;

@@ -1683,9 +1683,11 @@ name = "ratatui_frontend"
 version = "0.1.0"
 dependencies = [
  "chat_backend",
+ "clap",
  "crossterm",
  "futures",
  "ratatui",
+ "shared_utils",
  "textwrap",
  "thiserror 2.0.18",
  "tokio",
@@ -1928,6 +1930,8 @@ name = "shared_utils"
 version = "0.1.0"
 dependencies = [
  "directories",
+ "figment",
+ "serde",
 ]
 
 [[package]]
