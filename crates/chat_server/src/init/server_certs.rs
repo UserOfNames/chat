@@ -13,8 +13,13 @@ use super::{WriteParams, write_with_params};
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct InitServerCertsArgs {
-    /// Subject Alternative Names. Defaults to "localhost" if empty
-    #[arg(short, long, default_values = ["localhost"])]
+    /// Subject Alternative Names. Defaults to `["localhost", "127.0.0.1", "::1"]` if empty
+    #[arg(
+        short,
+        long,
+        value_delimiter = ',',
+        default_values = ["localhost", "127.0.0.1", "::1"]
+    )]
     subject_alt_names: Vec<String>,
 
     /// Overwrite existing files at output paths

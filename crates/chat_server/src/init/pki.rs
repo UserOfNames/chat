@@ -6,12 +6,20 @@ use rcgen::{BasicConstraints, CertificateParams, IsCa, Issuer, KeyPair};
 use serde::{Deserialize, Serialize};
 use shared_utils::first_match;
 
-use crate::{DefaultPaths, init::{WriteParams, write_with_params}};
+use crate::{
+    DefaultPaths,
+    init::{WriteParams, write_with_params},
+};
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct InitPkiArgs {
-    /// Subject Alternative Names. Defaults to "localhost" if empty
-    #[arg(short, long, default_values = ["localhost"])]
+    /// Subject Alternative Names. Defaults to `["localhost", "127.0.0.1", "::1"]` if empty
+    #[arg(
+        short,
+        long,
+        value_delimiter = ',',
+        default_values = ["localhost", "127.0.0.1", "::1"]
+    )]
     subject_alt_names: Vec<String>,
 
     /// Overwrite existing files at output paths

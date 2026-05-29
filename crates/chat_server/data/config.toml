@@ -1,5 +1,5 @@
 # Host address the listener task binds to
-listener_ip = "127.0.0.1"
+listener_ip = "::1"
 
 # Port the listener task binds to
 listener_port = 12345
