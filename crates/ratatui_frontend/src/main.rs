@@ -273,28 +273,26 @@ impl App {
                     .await;
             }
 
-            Action::SelectChannelIndex(i) => {
+            Action::SelectChannel(id) => {
                 // Selecting a channel when not connected is a NOP.
                 let Some(state) = &mut self.ui_server_state else {
                     return;
                 };
 
-                let Some(channel_id) = state.channels.iter().nth(i) else {
-                    // TODO: Report OOB selection? Shouldn't ever be possible, though, so idk
+                let Some(channel_id) = state.channels.get(&id) else {
                     return;
                 };
 
                 state.message_context = Some(MessageContext::Channel(channel_id.clone()));
             }
 
-            Action::SelectUserIndex(i) => {
+            Action::SelectUser(id) => {
                 // Selecting a user when not connected is a NOP.
                 let Some(state) = &mut self.ui_server_state else {
                     return;
                 };
 
-                let Some(user_id) = state.users.iter().nth(i) else {
-                    // TODO: Report OOB selection? Shouldn't ever be possible, though, so idk
+                let Some(user_id) = state.users.get(&id) else {
                     return;
                 };
 

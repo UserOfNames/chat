@@ -1,21 +1,27 @@
-use chat_backend::ui_server_state::{MessageContext, UIServerState};
+use chat_backend::{
+    network_protocol::UserId,
+    ui_server_state::{MessageContext, UIServerState},
+};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
-    style::Style,
-    widgets::{Block, Borders, List, ListState, StatefulWidget},
+    style::{Style, Stylize},
+    text::Line,
+    widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
 /// Widget that displays a scrollable list of users in the current server.
 #[derive(Debug)]
 pub struct UserList {
     list_state: ListState,
+    rendered_order: Vec<UserId>,
 }
 
 impl UserList {
     pub fn new() -> Self {
         Self {
             list_state: ListState::default(),
+            rendered_order: Vec::new(),
         }
     }
 
@@ -27,8 +33,10 @@ impl UserList {
         self.list_state.select_next();
     }
 
-    pub fn select(&self) -> Option<usize> {
-        self.list_state.selected()
+    pub fn select(&self) -> Option<UserId> {
+        self.list_state
+            .selected()
+            .and_then(|i| self.rendered_order.get(i).cloned())
     }
 
     pub fn render(
@@ -38,53 +46,80 @@ impl UserList {
         state: Option<&UIServerState>,
         focused: bool,
     ) {
-        let users_list: Vec<String> = if let Some(state) = state {
-            let selected_user = if let Some(MessageContext::User(id)) = &state.message_context {
-                Some(id)
-            } else {
-                None
-            };
-
-            state
-                .users
-                .iter()
-                .map(|user_id| {
-                    if Some(user_id) == selected_user {
-                        format!("◉ {user_id}")
-                    } else {
-                        user_id.clone()
-                    }
-                })
-                .collect()
+        let border_and_highlight_style = if focused {
+            Style::default().green()
         } else {
-            Vec::new()
+            Style::default()
         };
+
+        let title = Line::from_iter([" [u]".bold().blue(), "sers ".into()]);
+
+        let block = Block::default()
+            .borders(Borders::TOP)
+            .title(title)
+            .title_alignment(Alignment::Center)
+            .border_style(border_and_highlight_style);
+
+        let Some(state) = state else {
+            block.render(area, buf);
+            return;
+        };
+
+        // === Rebuild the rendering order cache ===
+        // We want to show our user ID at the top, so we push it first and join the rest after it
+        self.rendered_order.clear();
+        self.rendered_order.reserve(state.users.len());
+
+        self.rendered_order.push(state.your_id.clone());
+
+        for user_id in &state.users {
+            if user_id != &state.your_id {
+                self.rendered_order.push(user_id.clone());
+            }
+        }
+
+        let selected_user = match &state.message_context {
+            Some(MessageContext::User(id)) => Some(id),
+            _ => None,
+        };
+
+        // Needed when building our ID so the selection marker shows
+        let your_id_prefix = if Some(&state.your_id) == selected_user {
+            "◉ "
+        } else {
+            ""
+        };
+
+        // Special style to set our ID apart
+        let your_id_line = Line::from_iter([
+            your_id_prefix.into(),
+            format!("{} ", state.your_id).blue(),
+            "(you)".into(),
+        ]);
+
+        let users_list: Vec<ListItem> = self
+            .rendered_order
+            .iter()
+            .map(|user_id| {
+                let line = if user_id == &state.your_id {
+                    your_id_line.clone()
+                } else if Some(user_id) == selected_user {
+                    Line::from(format!("◉ {user_id}"))
+                } else {
+                    Line::from(user_id.as_str())
+                };
+
+                ListItem::new(line)
+            })
+            .collect();
 
         if !users_list.is_empty() && self.list_state.selected().is_none() {
             self.list_state.select_first();
         }
 
-        let border_style = if focused {
-            Style::default().green()
-        } else {
-            Style::default()
-        };
-
-        let highlight_style = if focused {
-            Style::default().green()
-        } else {
-            Style::default()
-        };
-
         let users_list = List::new(users_list)
-            .block(
-                Block::default()
-                    .borders(Borders::TOP)
-                    .title(" Users ")
-                    .title_alignment(Alignment::Center)
-                    .border_style(border_style),
-            )
-            .highlight_style(highlight_style);
+            .block(block)
+            .highlight_style(border_and_highlight_style);
 
         StatefulWidget::render(users_list, area, buf, &mut self.list_state);
     }

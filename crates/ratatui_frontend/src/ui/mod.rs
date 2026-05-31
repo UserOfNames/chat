@@ -1,6 +1,7 @@
 pub mod main_panel;
 pub mod popups;
 
+use chat_backend::network_protocol::{ChannelId, UserId};
 use crossterm::event::KeyEvent;
 
 use popups::Popup;
@@ -15,8 +16,8 @@ pub enum Action {
     SendMessage(String),
     YieldFocus,
 
-    SelectChannelIndex(usize),
-    SelectUserIndex(usize),
+    SelectChannel(ChannelId),
+    SelectUser(UserId),
 }
 
 pub trait KeyHandler {

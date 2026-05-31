@@ -1,21 +1,27 @@
-use chat_backend::ui_server_state::{MessageContext, UIServerState};
+use chat_backend::{
+    network_protocol::ChannelId,
+    ui_server_state::{MessageContext, UIServerState},
+};
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
-    style::Style,
-    widgets::{Block, Borders, List, ListState, StatefulWidget},
+    style::{Style, Stylize},
+    text::Line,
+    widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
 /// Widget that displays a scrollable list of channels in the current server.
 #[derive(Debug)]
 pub struct ChannelList {
     list_state: ListState,
+    rendered_order: Vec<ChannelId>,
 }
 
 impl ChannelList {
     pub fn new() -> Self {
         Self {
             list_state: ListState::default().with_selected(Some(0)),
+            rendered_order: Vec::new(),
         }
     }
 
@@ -27,8 +33,10 @@ impl ChannelList {
         self.list_state.select_next();
     }
 
-    pub fn select(&self) -> Option<usize> {
-        self.list_state.selected()
+    pub fn select(&self) -> Option<ChannelId> {
+        self.list_state
+            .selected()
+            .and_then(|i| self.rendered_order.get(i).cloned())
     }
 
     pub fn render(
@@ -38,54 +46,55 @@ impl ChannelList {
         state: Option<&UIServerState>,
         focused: bool,
     ) {
-        let channels_list: Vec<String> = if let Some(state) = state {
-            let current_channel = if let Some(MessageContext::Channel(id)) = &state.message_context
-            {
-                Some(id)
-            } else {
-                None
-            };
-
-            state
-                .channels
-                .iter()
-                .map(|channel_id| {
-                    if Some(channel_id) == current_channel {
-                        format!("◉ {channel_id}")
-                    } else {
-                        channel_id.clone()
-                    }
-                })
-                .collect()
+        let border_and_highlight_style = if focused {
+            Style::default().green()
         } else {
-            Vec::new()
+            Style::default()
         };
+
+        let title = Line::from_iter([" [c]".bold().blue(), "hannels ".into()]);
+
+        let block = Block::default()
+            .borders(Borders::TOP)
+            .title(title)
+            .title_alignment(Alignment::Center)
+            .border_style(border_and_highlight_style);
+
+        let Some(state) = state else {
+            block.render(area, buf);
+            return;
+        };
+
+        // === Rebuild the rendering order cache ===
+        self.rendered_order.clear();
+        self.rendered_order = state.channels.iter().cloned().collect();
+
+        let current_channel = match &state.message_context {
+            Some(MessageContext::Channel(id)) => Some(id),
+            _ => None,
+        };
+
+        let channels_list: Vec<ListItem> = self
+            .rendered_order
+            .iter()
+            .map(|channel_id| {
+                let line = if Some(channel_id) == current_channel {
+                    Line::from(format!("◉ {channel_id}"))
+                } else {
+                    Line::from(channel_id.as_str())
+                };
+
+                ListItem::new(line)
+            })
+            .collect();
 
         if !channels_list.is_empty() && self.list_state.selected().is_none() {
             self.list_state.select_first();
         }
 
-        let border_style = if focused {
-            Style::default().green()
-        } else {
-            Style::default()
-        };
-
-        let highlight_style = if focused {
-            Style::default().green()
-        } else {
-            Style::default()
-        };
-
         let channels_list = List::new(channels_list)
-            .block(
-                Block::default()
-                    .borders(Borders::TOP)
-                    .title(" Channels ")
-                    .title_alignment(Alignment::Center)
-                    .border_style(border_style),
-            )
-            .highlight_style(highlight_style);
+            .block(block)
+            .highlight_style(border_and_highlight_style);
 
         StatefulWidget::render(channels_list, area, buf, &mut self.list_state);
     }

@@ -9,11 +9,11 @@ use messages::Messages;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::Style,
     widgets::{Block, Widget},
 };
+use ratatui_textarea::TextArea;
 use sidebar::Sidebar;
-use tui_textarea::TextArea;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
@@ -35,25 +35,21 @@ pub struct MainPanel {
 impl MainPanel {
     /// Create a new `MainPanel`.
     pub fn new() -> Self {
+        let block = Block::bordered().title(" Input ");
+        let mut input = TextArea::default();
+        input.set_block(block);
+
         Self {
             focus: Focus::None,
-            input: Self::new_textbox(),
+            input,
             messages: Messages::new(),
             sidebar: Sidebar::new(),
         }
     }
 
-    /// Return a new textbox with default settings for `self.input`.
-    fn new_textbox() -> TextArea<'static> {
-        let block = Block::bordered().title(" Input ");
-        let mut textbox = TextArea::default();
-        textbox.set_block(block);
-        textbox
-    }
-
     /// Reset the input area.
     fn reset_input(&mut self) {
-        self.input = Self::new_textbox();
+        self.input.clear();
     }
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&UIServerState>) {
@@ -95,7 +91,6 @@ impl MainPanel {
         };
         self.input.set_cursor_style(cursor_style);
 
-        // NOTE: If I ever implement newlines in messages, it's worth considering removing this.
         self.input.set_cursor_line_style(Style::default());
     }
 }

@@ -5,7 +5,7 @@ use ratatui::{
     layout::Rect,
     widgets::{Block, Widget},
 };
-use tui_textarea::TextArea;
+use ratatui_textarea::TextArea;
 
 use super::{Action, KeyHandler, Popup, SizeHint, SizeKind};
 

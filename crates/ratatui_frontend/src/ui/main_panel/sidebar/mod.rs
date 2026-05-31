@@ -100,11 +100,11 @@ impl KeyHandler for Sidebar {
                 }
 
                 KeyCode::Enter => {
-                    let Some(i) = self.channel_list.select() else {
+                    let Some(id) = self.channel_list.select() else {
                         return Action::None;
                     };
 
-                    Action::SelectChannelIndex(i)
+                    Action::SelectChannel(id)
                 }
 
                 _ => Action::None,
@@ -127,11 +127,11 @@ impl KeyHandler for Sidebar {
                 }
 
                 KeyCode::Enter => {
-                    let Some(i) = self.user_list.select() else {
+                    let Some(id) = self.user_list.select() else {
                         return Action::None;
                     };
 
-                    Action::SelectUserIndex(i)
+                    Action::SelectUser(id)
                 }
 
                 _ => Action::None,

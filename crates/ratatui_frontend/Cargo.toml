@@ -11,7 +11,7 @@ ratatui = "0.30"
 textwrap = "0.16"
 thiserror = { workspace = true }
 tokio = { workspace = true }
-tui-textarea-2 = "0.11"
+ratatui-textarea = "0.9"
 
 chat_backend = { workspace = true }
 shared_utils = { workspace = true }
