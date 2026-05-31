@@ -1,4 +1,8 @@
-use std::{env::home_dir, io, path::{Component, Path, PathBuf}};
+use std::{
+    env::home_dir,
+    io,
+    path::{Component, Path, PathBuf},
+};
 
 use directories::ProjectDirs;
 use figment::value::magic::RelativePathBuf;
@@ -123,7 +127,10 @@ impl TildeRelativePathBuf {
             && first == "~"
         {
             let Some(home_dir) = home_dir() else {
-                return Some(Err(io::Error::new(io::ErrorKind::NotFound, "Home directory failed to resolve")));
+                return Some(Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Home directory failed to resolve",
+                )));
             };
 
             let remainder = components.as_path();

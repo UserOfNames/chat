@@ -102,7 +102,6 @@ pub struct BackendHandle {
     /// Sender for `ClientCommand`s.
     pub cmd_tx: Sender<ClientCommand>,
     /// Receiver of `ClientEvent`s.
-
     pub event_rx: Receiver<client_event::Result>,
 }
 
