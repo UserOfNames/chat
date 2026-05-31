@@ -84,6 +84,12 @@ impl UIServerState {
             }
 
             ClientEvent::UserLeft(user_id) => {
+                if let Some(MessageContext::User(id)) = &self.message_context
+                    && id == &user_id
+                {
+                    self.message_context = None;
+                }
+
                 self.users.remove(&user_id);
             }
 
