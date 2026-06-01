@@ -4,14 +4,14 @@ use std::io;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ChannelId, UserId,
+    ChannelId, UserId, io_err_invalid_data,
     proto::{
         self, ClientHello, CommandFrame, SendMessage as ProtoSendMessage, command_frame,
         send_message,
     },
 };
 
-pub type SendDestinationFrame = send_message::Destination;
+type ProtoDestinationFrame = send_message::Destination;
 
 /// Where to send a chat message.
 #[derive(Debug, Clone)]
@@ -24,18 +24,18 @@ pub enum SendDestination {
     User(UserId),
 }
 
-impl TryFrom<SendDestinationFrame> for SendDestination {
+impl TryFrom<ProtoDestinationFrame> for SendDestination {
     type Error = io::Error;
 
-    fn try_from(value: SendDestinationFrame) -> Result<Self, Self::Error> {
+    fn try_from(value: ProtoDestinationFrame) -> Result<Self, Self::Error> {
         Ok(match value {
-            SendDestinationFrame::ChannelId(id) => Self::Channel(id.try_into()?),
-            SendDestinationFrame::UserId(id) => Self::User(id.try_into()?),
+            ProtoDestinationFrame::ChannelId(id) => Self::Channel(id.try_into()?),
+            ProtoDestinationFrame::UserId(id) => Self::User(id.try_into()?),
         })
     }
 }
 
-impl From<SendDestination> for SendDestinationFrame {
+impl From<SendDestination> for ProtoDestinationFrame {
     fn from(value: SendDestination) -> Self {
         match value {
             SendDestination::Channel(id) => Self::ChannelId(id.into()),
@@ -175,8 +175,4 @@ impl From<NetworkCommand> for CommandFrame {
             },
         }
     }
-}
-
-fn io_err_invalid_data() -> io::Error {
-    io::Error::from(io::ErrorKind::InvalidData)
 }

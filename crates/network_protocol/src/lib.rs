@@ -20,6 +20,9 @@ use std::io;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// Default port the server listens to for new connections.
+pub const DEFAULT_LISTENER_PORT: u16 = 12345;
+
 /// Type to uniquely identify clients.
 pub type UserId = String;
 
@@ -54,5 +57,6 @@ impl From<ChannelId> for proto::ChannelId {
     }
 }
 
-/// Default port the server listens to for new connections.
-pub const DEFAULT_LISTENER_PORT: u16 = 12345;
+fn io_err_invalid_data() -> io::Error {
+    io::Error::from(io::ErrorKind::InvalidData)
+}

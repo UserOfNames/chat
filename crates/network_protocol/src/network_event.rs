@@ -4,14 +4,11 @@ use std::io;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    ChannelId, UserId,
-    proto::{
-        self, ChannelSync as ProtoChannelSync, EventFrame, ReceivedMessage as ProtoReceivedMessage,
-        ServerHello as ProtoServerHello, UserSync as ProtoUserSync, event_frame, received_message,
-    },
+    ChannelId, UserId, io_err_invalid_data,
+    proto::{self, EventFrame, event_frame, received_message},
 };
 
-pub type ProtoReceiveDestination = received_message::Destination;
+type ProtoReceiveDestination = received_message::Destination;
 
 /// Details about where a chat message is sent to.
 #[derive(Debug, Clone)]
@@ -58,10 +55,10 @@ pub struct ReceivedMessage {
     pub destination: ReceiveDestination,
 }
 
-impl TryFrom<ProtoReceivedMessage> for ReceivedMessage {
+impl TryFrom<proto::ReceivedMessage> for ReceivedMessage {
     type Error = io::Error;
 
-    fn try_from(value: ProtoReceivedMessage) -> Result<Self, Self::Error> {
+    fn try_from(value: proto::ReceivedMessage) -> Result<Self, Self::Error> {
         let destination: ReceiveDestination = value
             .destination
             .ok_or_else(io_err_invalid_data)?
@@ -80,7 +77,7 @@ impl TryFrom<ProtoReceivedMessage> for ReceivedMessage {
     }
 }
 
-impl From<ReceivedMessage> for ProtoReceivedMessage {
+impl From<ReceivedMessage> for proto::ReceivedMessage {
     fn from(value: ReceivedMessage) -> Self {
         Self {
             contents: value.contents,
@@ -97,7 +94,7 @@ pub struct ServerHello {
     pub default_channel_id: Option<ChannelId>,
 }
 
-impl TryFrom<ProtoServerHello> for ServerHello {
+impl TryFrom<proto::ServerHello> for ServerHello {
     type Error = io::Error;
 
     fn try_from(value: proto::ServerHello) -> Result<Self, Self::Error> {
@@ -115,7 +112,7 @@ impl TryFrom<ProtoServerHello> for ServerHello {
     }
 }
 
-impl From<ServerHello> for ProtoServerHello {
+impl From<ServerHello> for proto::ServerHello {
     fn from(value: ServerHello) -> Self {
         Self {
             your_id: Some(value.your_id.into()),
@@ -130,10 +127,10 @@ pub struct ChannelSync {
     pub channel_ids: Vec<ChannelId>,
 }
 
-impl TryFrom<ProtoChannelSync> for ChannelSync {
+impl TryFrom<proto::ChannelSync> for ChannelSync {
     type Error = io::Error;
 
-    fn try_from(value: ProtoChannelSync) -> Result<Self, Self::Error> {
+    fn try_from(value: proto::ChannelSync) -> Result<Self, Self::Error> {
         let channel_ids: Vec<ChannelId> = value
             .channel_ids
             .into_iter()
@@ -144,7 +141,7 @@ impl TryFrom<ProtoChannelSync> for ChannelSync {
     }
 }
 
-impl From<ChannelSync> for ProtoChannelSync {
+impl From<ChannelSync> for proto::ChannelSync {
     fn from(value: ChannelSync) -> Self {
         let channel_ids: Vec<proto::ChannelId> =
             value.channel_ids.into_iter().map(Into::into).collect();
@@ -159,10 +156,10 @@ pub struct UserSync {
     pub user_ids: Vec<UserId>,
 }
 
-impl TryFrom<ProtoUserSync> for UserSync {
+impl TryFrom<proto::UserSync> for UserSync {
     type Error = io::Error;
 
-    fn try_from(value: ProtoUserSync) -> Result<Self, Self::Error> {
+    fn try_from(value: proto::UserSync) -> Result<Self, Self::Error> {
         let user_ids: Vec<UserId> = value
             .user_ids
             .into_iter()
@@ -173,7 +170,7 @@ impl TryFrom<ProtoUserSync> for UserSync {
     }
 }
 
-impl From<UserSync> for ProtoUserSync {
+impl From<UserSync> for proto::UserSync {
     fn from(value: UserSync) -> Self {
         let user_ids: Vec<proto::UserId> = value.user_ids.into_iter().map(Into::into).collect();
 
@@ -258,8 +255,4 @@ impl From<NetworkEvent> for EventFrame {
             },
         }
     }
-}
-
-fn io_err_invalid_data() -> io::Error {
-    io::Error::from(io::ErrorKind::InvalidData)
 }
