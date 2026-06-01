@@ -1161,7 +1161,9 @@ dependencies = [
  "prost",
  "prost-build",
  "prost-types",
+ "serde",
  "tokio-util",
+ "uuid",
 ]
 
 [[package]]
@@ -2438,6 +2440,7 @@ dependencies = [
  "atomic",
  "getrandom 0.4.2",
  "js-sys",
+ "serde_core",
  "wasm-bindgen",
 ]
 

@@ -16,6 +16,10 @@ pub use network_event::{
 
 use std::io;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
 /// Type to uniquely identify clients.
 pub type UserId = String;
 

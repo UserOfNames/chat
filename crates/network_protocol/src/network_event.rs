@@ -1,5 +1,8 @@
 use std::io;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 use crate::{
     ChannelId, UserId,
     proto::{
@@ -12,6 +15,7 @@ pub type ProtoReceiveDestination = received_message::Destination;
 
 /// Details about where a chat message is sent to.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ReceiveDestination {
     /// Message is sent directly to the client.
     User(UserId),
@@ -42,6 +46,7 @@ impl From<ReceiveDestination> for ProtoReceiveDestination {
 
 /// A message sent from some other client to either a specific user, or a whole channel.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ReceivedMessage {
     /// The message's content.
     pub contents: String,
@@ -86,6 +91,7 @@ impl From<ReceivedMessage> for ProtoReceivedMessage {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ServerHello {
     pub your_id: UserId,
     pub default_channel_id: Option<ChannelId>,
@@ -119,6 +125,7 @@ impl From<ServerHello> for ProtoServerHello {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ChannelSync {
     pub channel_ids: Vec<ChannelId>,
 }
@@ -147,6 +154,7 @@ impl From<ChannelSync> for ProtoChannelSync {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserSync {
     pub user_ids: Vec<UserId>,
 }
@@ -175,6 +183,7 @@ impl From<UserSync> for ProtoUserSync {
 
 /// An event sent from the server to the client backend.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum NetworkEvent {
     /// Initial message to give the client session info and state.
     ServerHello(ServerHello),

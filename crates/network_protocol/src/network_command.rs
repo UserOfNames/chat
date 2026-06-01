@@ -1,5 +1,8 @@
 use std::io;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 use crate::{
     ChannelId, UserId,
     proto::{
@@ -12,6 +15,7 @@ pub type SendDestinationFrame = send_message::Destination;
 
 /// Where to send a chat message.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SendDestination {
     /// Send to a channel with the given ID.
     Channel(ChannelId),
@@ -42,6 +46,7 @@ impl From<SendDestination> for SendDestinationFrame {
 
 /// A request to fetch the server's channel list in bulk.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FetchChannels;
 
 impl TryFrom<proto::FetchChannels> for FetchChannels {
@@ -60,6 +65,7 @@ impl From<FetchChannels> for proto::FetchChannels {
 
 /// A request to fetch the server's user list in bulk.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FetchUsers;
 
 impl TryFrom<proto::FetchUsers> for FetchUsers {
@@ -78,6 +84,7 @@ impl From<FetchUsers> for proto::FetchUsers {
 
 /// A chat message sent to the server.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SendMessage {
     /// The message's content.
     pub contents: String,
@@ -113,6 +120,7 @@ impl From<SendMessage> for ProtoSendMessage {
 
 /// A command sent from the client backend to the server.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum NetworkCommand {
     /// Initial message to the server, requesting to connect.
     ClientHello,

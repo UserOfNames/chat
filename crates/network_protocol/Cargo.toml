@@ -6,10 +6,16 @@ edition = "2024"
 [dependencies]
 prost = { workspace = true }
 prost-types = "0.14"
+serde = { workspace = true, optional = true }
 tokio-util = { workspace = true }
+uuid = { workspace = true }
 
 [build-dependencies]
 prost-build = "0.14"
+
+[features]
+default = []
+serde = ["dep:serde", "uuid/serde"]
 
 [lints]
 workspace = true

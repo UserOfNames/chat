@@ -30,8 +30,9 @@ tokio = { version = "1", features = ["full"] }
 tokio-rustls = "0.26"
 tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-util = { version = "0.7", features = ["codec", "rt"] }
+uuid = { version = "1", features = ["serde"] }
 webpki-roots = { version = "1" }
 
 chat_backend = { path = "./crates/chat_backend/" }
-network_protocol = { path = "./crates/network_protocol/" }
+network_protocol = { path = "./crates/network_protocol/", features = ["serde"] }
 shared_utils = { path = "./crates/shared_utils/" }
