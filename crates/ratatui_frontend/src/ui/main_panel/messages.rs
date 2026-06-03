@@ -25,8 +25,24 @@ impl Messages {
 
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&UIServerState>) {
         let title = match state.and_then(|state| state.message_context.as_ref()) {
-            Some(MessageContext::Channel(id)) => format!(" Channel: {id} "),
-            Some(MessageContext::User(id)) => format!(" User: {id} "),
+            Some(MessageContext::Channel(id)) => {
+                let name = state
+                    .expect("If this arm triggers, state is always Some")
+                    .get_channel_name(*id)
+                    .unwrap_or("Unknown");
+
+                format!(" Channel: {name} ")
+            }
+
+            Some(MessageContext::User(id)) => {
+                let name = state
+                    .expect("If this arm triggers, state is always Some")
+                    .get_user_name(*id)
+                    .unwrap_or("Unknown");
+
+                format!(" User: {name} ")
+            }
+
             None => " Messages ".to_owned(),
         };
 
@@ -60,8 +76,13 @@ impl Messages {
             Style::new().blue()
         };
 
-        let header = Line::styled(&message.sender_id, header_style);
+        let sender_name = state
+            .get_user_name(message.sender_id)
+            .unwrap_or("Unknown user");
 
+        let header = Line::styled(sender_name, header_style);
+
+        // TODO: Cache line wrapping? It's expensive logic to run every rendering tick.
         let wrapped_contents: Vec<Line> = textwrap::wrap(&message.contents, max_width as usize)
             .into_iter()
             .map(Line::from)

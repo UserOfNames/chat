@@ -67,21 +67,26 @@ impl ChannelList {
 
         // === Rebuild the rendering order cache ===
         self.rendered_order.clear();
-        self.rendered_order = state.channels.iter().cloned().collect();
+        self.rendered_order = state.channels.keys().copied().collect();
 
         let current_channel = match &state.message_context {
-            Some(MessageContext::Channel(id)) => Some(id),
+            Some(MessageContext::Channel(id)) => state.channels.get(id),
             _ => None,
-        };
+        }
+        .map(String::as_str);
 
         let channels_list: Vec<ListItem> = self
             .rendered_order
             .iter()
             .map(|channel_id| {
-                let line = if Some(channel_id) == current_channel {
-                    Line::from(format!("◉ {channel_id}"))
+                let channel_name = state
+                    .get_channel_name(*channel_id)
+                    .unwrap_or("Unknown channel");
+
+                let line = if Some(channel_name) == current_channel {
+                    Line::from(format!("◉ {channel_name}"))
                 } else {
-                    Line::from(channel_id.as_str())
+                    Line::from(channel_name)
                 };
 
                 ListItem::new(line)

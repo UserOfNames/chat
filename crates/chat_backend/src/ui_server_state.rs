@@ -1,7 +1,9 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use network_protocol::{ChannelId, ReceiveDestination, ReceivedMessage, UserId};
+use network_protocol::{
+    ChannelId, ChannelInfo, ReceiveDestination, ReceivedMessage, UserId, UserInfo,
+};
 
 use crate::client_event::{ClientEvent, InitialSync};
 
@@ -21,11 +23,10 @@ pub enum MessageContext {
 /// This is provided for convenience, as a reasonable default implementation.
 #[derive(Debug)]
 pub struct UIServerState {
-    /// Your user ID for the session. If this is `None`, it means the backend has not synced the
-    /// server state. This most commonly means you aren't connected to a server.
+    /// Your user ID for the session.
     pub your_id: UserId,
 
-    /// The address of the server you're currently connected to, if any.
+    /// The address of the server you're currently connected to.
     pub connected_addr: SocketAddr,
 
     /// The current message context. This determines what messages will be displayed. If `None`,
@@ -33,10 +34,10 @@ pub struct UIServerState {
     pub message_context: Option<MessageContext>,
 
     /// List of channels in the current server.
-    pub channels: BTreeSet<ChannelId>,
+    pub channels: HashMap<ChannelId, String>,
 
     /// List of users in the current server.
-    pub users: BTreeSet<UserId>,
+    pub users: HashMap<UserId, String>,
 
     /// Message history in the current server.
     pub messages: HashMap<MessageContext, Vec<ReceivedMessage>>,
@@ -57,8 +58,8 @@ impl UIServerState {
             your_id,
             connected_addr: server_addr,
             message_context: default_channel_id.map(MessageContext::Channel),
-            channels: BTreeSet::new(),
-            users: BTreeSet::new(),
+            channels: HashMap::new(),
+            users: HashMap::new(),
             messages: HashMap::new(),
         }
     }
@@ -75,12 +76,20 @@ impl UIServerState {
         match event {
             ClientEvent::InitialSync(sync) => todo!("Log error (should not sync twice)"),
 
-            ClientEvent::UserSync(sync) => self.users.extend(sync.user_ids),
+            ClientEvent::UserSync(sync) => {
+                for UserInfo { id, name } in sync.users {
+                    self.users.insert(id, name);
+                }
+            }
 
-            ClientEvent::ChannelSync(sync) => self.channels.extend(sync.channel_ids),
+            ClientEvent::ChannelSync(sync) => {
+                for ChannelInfo { id, name } in sync.channels {
+                    self.channels.insert(id, name);
+                }
+            }
 
-            ClientEvent::UserJoined(user_id) => {
-                self.users.insert(user_id);
+            ClientEvent::UserJoined(user_info) => {
+                self.users.insert(user_info.id, user_info.name);
             }
 
             ClientEvent::UserLeft(user_id) => {
@@ -105,13 +114,14 @@ impl UIServerState {
         let context = match message.destination {
             // If we sent the message, its context is the destination.
             ReceiveDestination::User(ref id) if message.sender_id == self.your_id => {
-                MessageContext::User(id.clone())
+                MessageContext::User(*id)
             }
 
             // Otherwise, the context is the sender.
-            ReceiveDestination::User(_) => MessageContext::User(message.sender_id.clone()),
+            ReceiveDestination::User(_) => MessageContext::User(message.sender_id),
 
-            ReceiveDestination::Channel(ref channel) => MessageContext::Channel(channel.clone()),
+            // Of course, the context of a channel is just the channel.
+            ReceiveDestination::Channel(ref id) => MessageContext::Channel(*id),
         };
 
         // Default vector capacity of 128 is only a reasonable default, not a significant value
@@ -119,5 +129,15 @@ impl UIServerState {
             .entry(context)
             .or_insert(Vec::with_capacity(128))
             .push(message);
+    }
+
+    /// Get the name of a channel with the given ID, if known.
+    pub fn get_channel_name(&self, id: ChannelId) -> Option<&str> {
+        self.channels.get(&id).map(String::as_str)
+    }
+
+    /// Get the name of a user with the given ID, if known.
+    pub fn get_user_name(&self, id: UserId) -> Option<&str> {
+        self.users.get(&id).map(String::as_str)
     }
 }

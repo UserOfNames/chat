@@ -250,8 +250,8 @@ impl App {
                 };
 
                 let destination = match &state.message_context {
-                    Some(MessageContext::Channel(id)) => SendDestination::Channel(id.clone()),
-                    Some(MessageContext::User(id)) => SendDestination::User(id.clone()),
+                    Some(MessageContext::Channel(id)) => SendDestination::Channel(*id),
+                    Some(MessageContext::User(id)) => SendDestination::User(*id),
                     None => {
                         self.notify(
                             "Cannot send message: no user or channel is selected.".to_owned(),
@@ -279,11 +279,7 @@ impl App {
                     return;
                 };
 
-                let Some(channel_id) = state.channels.get(&id) else {
-                    return;
-                };
-
-                state.message_context = Some(MessageContext::Channel(channel_id.clone()));
+                state.message_context = Some(MessageContext::Channel(id));
             }
 
             Action::SelectUser(id) => {
@@ -292,11 +288,7 @@ impl App {
                     return;
                 };
 
-                let Some(user_id) = state.users.get(&id) else {
-                    return;
-                };
-
-                state.message_context = Some(MessageContext::User(user_id.clone()));
+                state.message_context = Some(MessageContext::User(id));
             }
 
             // Yielding at the top-level focus is a NOP

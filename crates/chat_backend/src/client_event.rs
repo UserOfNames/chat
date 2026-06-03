@@ -6,7 +6,7 @@ use std::result::Result as StdResult;
 
 use thiserror::Error;
 
-use network_protocol::{ChannelId, ChannelSync, NetworkEvent, UserId, UserSync};
+use network_protocol::{ChannelId, ChannelSync, NetworkEvent, UserId, UserInfo, UserSync};
 
 /// An error arising in the client backend while processing a `ClientCommand`.
 #[derive(Debug, Error)]
@@ -47,7 +47,7 @@ pub enum ClientEvent {
     ChannelSync(ChannelSync),
 
     /// A new user joined the server.
-    UserJoined(UserId),
+    UserJoined(UserInfo),
 
     /// A user left the server.
     UserLeft(UserId),

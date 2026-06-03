@@ -70,30 +70,33 @@ impl UserList {
         self.rendered_order.clear();
         self.rendered_order.reserve(state.users.len());
 
-        self.rendered_order.push(state.your_id.clone());
+        self.rendered_order.push(state.your_id);
 
-        for user_id in &state.users {
+        for user_id in state.users.keys() {
             if user_id != &state.your_id {
-                self.rendered_order.push(user_id.clone());
+                self.rendered_order.push(*user_id);
             }
         }
 
-        let selected_user = match &state.message_context {
+        let selected_user_id = match &state.message_context {
             Some(MessageContext::User(id)) => Some(id),
             _ => None,
         };
 
         // Needed when building our ID so the selection marker shows
-        let your_id_prefix = if Some(&state.your_id) == selected_user {
+        // TODO: your_name variable, maybe?
+        let your_id_prefix = if Some(&state.your_id) == selected_user_id {
             "◉ "
         } else {
             ""
         };
 
+        let your_name = state.get_user_name(state.your_id).unwrap_or("YOU");
+
         // Special style to set our ID apart
         let your_id_line = Line::from_iter([
             your_id_prefix.into(),
-            format!("{} ", state.your_id).blue(),
+            format!("{} ", your_name).blue(),
             "(you)".into(),
         ]);
 
@@ -101,12 +104,14 @@ impl UserList {
             .rendered_order
             .iter()
             .map(|user_id| {
+                let user_name = state.get_user_name(*user_id).unwrap_or("Unknown user");
+
                 let line = if user_id == &state.your_id {
                     your_id_line.clone()
-                } else if Some(user_id) == selected_user {
-                    Line::from(format!("◉ {user_id}"))
+                } else if Some(user_id) == selected_user_id {
+                    Line::from(format!("◉ {user_name}"))
                 } else {
-                    Line::from(user_id.as_str())
+                    Line::from(user_name)
                 };
 
                 ListItem::new(line)

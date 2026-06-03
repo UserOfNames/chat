@@ -10,5 +10,15 @@ listener_port = 12345
 # Path to the TLS private key file associated with the certificate
 # tls_key_path = ""
 
-# List of all the channel IDs on the server
-channel_ids = [ "General" ]
+# List of all the channels on the server.
+#
+# The IDs are integer keys. IDs uniquely identify the channel's history and
+# should NEVER change!
+#
+# Names are display names shown to clients. They may change without issue.
+#
+# The first channel listed will be treated as the default channel.
+channels = [ 
+    { id = 1, name = "General" },
+    { id = 2, name = "Help" },
+]

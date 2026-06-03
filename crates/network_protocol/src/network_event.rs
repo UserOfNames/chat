@@ -123,58 +123,116 @@ impl From<ServerHello> for proto::ServerHello {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ChannelInfo {
+    pub id: ChannelId,
+    pub name: String,
+}
+
+impl TryFrom<proto::ChannelInfo> for ChannelInfo {
+    type Error = io::Error;
+
+    fn try_from(value: proto::ChannelInfo) -> Result<Self, Self::Error> {
+        let id = value.id.ok_or_else(io_err_invalid_data)?.try_into()?;
+
+        Ok(Self {
+            id,
+            name: value.name,
+        })
+    }
+}
+
+impl From<ChannelInfo> for proto::ChannelInfo {
+    fn from(value: ChannelInfo) -> Self {
+        Self {
+            id: Some(value.id.into()),
+            name: value.name,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct UserInfo {
+    pub id: UserId,
+    pub name: String,
+}
+
+impl TryFrom<proto::UserInfo> for UserInfo {
+    type Error = io::Error;
+
+    fn try_from(value: proto::UserInfo) -> Result<Self, Self::Error> {
+        let id = value.id.ok_or_else(io_err_invalid_data)?.try_into()?;
+
+        Ok(Self {
+            id,
+            name: value.name,
+        })
+    }
+}
+
+impl From<UserInfo> for proto::UserInfo {
+    fn from(value: UserInfo) -> Self {
+        Self {
+            id: Some(value.id.into()),
+            name: value.name,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ChannelSync {
-    pub channel_ids: Vec<ChannelId>,
+    pub channels: Vec<ChannelInfo>,
 }
 
 impl TryFrom<proto::ChannelSync> for ChannelSync {
     type Error = io::Error;
 
     fn try_from(value: proto::ChannelSync) -> Result<Self, Self::Error> {
-        let channel_ids: Vec<ChannelId> = value
-            .channel_ids
+        let channels: Vec<ChannelInfo> = value
+            .channels
             .into_iter()
             .map(TryInto::try_into)
             .collect::<Result<_, _>>()?;
 
-        Ok(Self { channel_ids })
+        Ok(Self { channels })
     }
 }
 
 impl From<ChannelSync> for proto::ChannelSync {
     fn from(value: ChannelSync) -> Self {
-        let channel_ids: Vec<proto::ChannelId> =
-            value.channel_ids.into_iter().map(Into::into).collect();
+        let channels: Vec<proto::ChannelInfo> =
+            value.channels.into_iter().map(Into::into).collect();
 
-        Self { channel_ids }
+        Self { channels }
     }
 }
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserSync {
-    pub user_ids: Vec<UserId>,
+    pub users: Vec<UserInfo>,
 }
 
 impl TryFrom<proto::UserSync> for UserSync {
     type Error = io::Error;
 
     fn try_from(value: proto::UserSync) -> Result<Self, Self::Error> {
-        let user_ids: Vec<UserId> = value
-            .user_ids
+        let users: Vec<UserInfo> = value
+            .users
             .into_iter()
             .map(TryInto::try_into)
             .collect::<Result<_, _>>()?;
 
-        Ok(Self { user_ids })
+        Ok(Self { users })
     }
 }
 
 impl From<UserSync> for proto::UserSync {
     fn from(value: UserSync) -> Self {
-        let user_ids: Vec<proto::UserId> = value.user_ids.into_iter().map(Into::into).collect();
+        let users: Vec<proto::UserInfo> = value.users.into_iter().map(Into::into).collect();
 
-        Self { user_ids }
+        Self { users }
     }
 }
 
@@ -192,7 +250,7 @@ pub enum NetworkEvent {
     UserSync(UserSync),
 
     /// A new user joined the server.
-    UserJoined(UserId),
+    UserJoined(UserInfo),
 
     /// A user left the server.
     UserLeft(UserId),
@@ -214,7 +272,7 @@ impl TryFrom<EventFrame> for NetworkEvent {
 
             Variant::UserSync(user_sync) => Ok(Self::UserSync(user_sync.try_into()?)),
 
-            Variant::UserJoined(user_id) => Ok(Self::UserJoined(user_id.try_into()?)),
+            Variant::UserJoined(user_info) => Ok(Self::UserJoined(user_info.try_into()?)),
 
             Variant::UserLeft(user_id) => Ok(Self::UserLeft(user_id.try_into()?)),
 
@@ -242,8 +300,8 @@ impl From<NetworkEvent> for EventFrame {
                 variant: Some(Variant::UserSync(user_sync.into())),
             },
 
-            NetworkEvent::UserJoined(user_id) => Self {
-                variant: Some(Variant::UserJoined(user_id.into())),
+            NetworkEvent::UserJoined(user_info) => Self {
+                variant: Some(Variant::UserJoined(user_info.into())),
             },
 
             NetworkEvent::UserLeft(user_id) => Self {

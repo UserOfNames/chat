@@ -3,12 +3,26 @@ package network_protocol.items;
 
 import "google/protobuf/empty.proto";
 
+message Uuid {
+  bytes value = 1;
+}
+
 message ChannelId {
-  string id = 1;
+  uint64 id = 1;
 }
 
 message UserId {
-  string id = 1;
+  Uuid id = 1;
+}
+
+message ChannelInfo {
+  ChannelId id = 1;
+  string name = 2;
+}
+
+message UserInfo {
+  UserId id = 1;
+  string name = 2;
 }
 
 // ======================================================
@@ -61,10 +75,12 @@ message EventFrame {
     ChannelSync channel_sync = 2;
     UserSync user_sync = 3;
 
-    UserId user_joined = 4;
+    UserInfo user_joined = 4;
     UserId user_left = 5;
 
-    ReceivedMessage received_message = 8;
+    // RESERVED: User changed name, channel added, channel removed, channel changed name
+
+    ReceivedMessage received_message = 9;
   }
 }
 
@@ -79,6 +95,11 @@ message ReceivedMessage {
   }
 }
 
+// A user changed their display name.
+message UserChangedName {
+  UserInfo new_user_info = 1;
+}
+
 // Initial message to give the client session info and state.
 message ServerHello {
   UserId your_id = 1;
@@ -87,10 +108,10 @@ message ServerHello {
 
 // Message to sync information about channels on the server.
 message ChannelSync {
-  repeated ChannelId channel_ids = 1;
+  repeated ChannelInfo channels = 1;
 }
 
 // Message to sync information about users on the server.
 message UserSync {
-  repeated UserId user_ids = 1;
+  repeated UserInfo users = 1;
 }

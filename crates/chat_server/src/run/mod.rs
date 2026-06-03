@@ -14,7 +14,7 @@ use figment::{
     Figment,
     providers::{Env, Format, Serialized, Toml},
 };
-use network_protocol::{ChannelId, NetworkEvent, UserId};
+use network_protocol::{ChannelId, ChannelInfo, NetworkEvent, UserId, UserInfo};
 use rustls::{
     ServerConfig,
     pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
@@ -54,11 +54,6 @@ pub struct RunArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     tls_key_path: Option<PathBuf>,
-
-    /// List of all the channel IDs on the server
-    #[serde(skip_serializing_if = "Option::is_none")]
-    #[arg(long, value_name = "PATH")]
-    channel_ids: Option<Vec<ChannelId>>,
 }
 
 /// Configuration for the server runtime.
@@ -76,8 +71,22 @@ struct Config {
     /// Path to the TLS private key file associated with the certificate.
     tls_key_path: TildeRelativePathBuf,
 
-    /// List of all the channel IDs on the server.
-    channel_ids: Vec<ChannelId>,
+    /// List of all the channels on the server. Includes channels' IDs and names.
+    channels: Vec<ChannelInfo>,
+}
+
+/// Represents a connected user.
+#[derive(Debug)]
+struct User {
+    pub info: UserInfo,
+    pub sender: mpsc::Sender<NetworkEvent>,
+}
+
+/// Represents a channel.
+#[derive(Debug)]
+struct Channel {
+    pub info: ChannelInfo,
+    pub broadcast: broadcast::Sender<NetworkEvent>,
 }
 
 /// State shared between all tasks.
@@ -85,8 +94,8 @@ struct Config {
 struct ServerState {
     default_channel_id: Option<ChannelId>,
     global_broadcast: broadcast::Sender<NetworkEvent>,
-    channels: DashMap<ChannelId, broadcast::Sender<NetworkEvent>>,
-    users: DashMap<UserId, mpsc::Sender<NetworkEvent>>,
+    channels: DashMap<ChannelId, Channel>,
+    users: DashMap<UserId, User>,
 }
 
 impl ServerState {
@@ -138,12 +147,19 @@ impl ChatServer {
 
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
 
-        let default_channel_id = config.channel_ids.first().cloned();
+        let default_channel_id = config.channels.first().map(|inner| inner.id);
         let server_state = Arc::new(ServerState::new(default_channel_id));
 
-        for channel_id in config.channel_ids {
+        for channel_info in config.channels {
             let (tx, _rx) = broadcast::channel(128); // TODO: Buffer size
-            server_state.channels.insert(channel_id, tx);
+
+            server_state.channels.insert(
+                channel_info.id,
+                Channel {
+                    info: channel_info,
+                    broadcast: tx,
+                },
+            );
         }
 
         Ok(Self {
