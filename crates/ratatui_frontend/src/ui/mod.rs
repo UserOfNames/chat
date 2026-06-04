@@ -1,7 +1,7 @@
 pub mod main_panel;
 pub mod popups;
 
-use chat_backend::network_protocol::{ChannelId, UserId};
+use chat_backend::{client_command::ConnectParams, network_protocol::{ChannelId, UserId}};
 use crossterm::event::KeyEvent;
 
 use popups::Popup;
@@ -12,7 +12,7 @@ pub enum Action {
     Quit,
     PushPopup(Box<dyn Popup>),
     PopPopup,
-    Connect(String, Option<u16>),
+    Connect(ConnectParams),
     SendMessage(String),
     YieldFocus,
 

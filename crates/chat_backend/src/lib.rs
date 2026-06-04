@@ -14,7 +14,6 @@ use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use ::network_protocol::{FetchChannels, FetchUsers, ServerHello};
 use figment::{
     Figment,
     providers::{Format, Toml},
@@ -27,15 +26,17 @@ use rustls::{
     },
 };
 use serde::{Deserialize, Serialize};
-use shared_utils::{NamedProjectDirs, TildeRelativePathBuf, first_match};
 use thiserror::Error;
 use tokio::sync::mpsc::{self, Receiver, Sender};
+use tokio_rustls::TlsConnector;
 
-use client_command::ClientCommand;
+use client_command::{ClientCommand, ConnectParams};
 use client_event::ClientEvent;
 use connection::Connection;
-use network_protocol::{NetworkCommand, NetworkEvent};
-use tokio_rustls::TlsConnector;
+use network_protocol::{
+    ClientHello, FetchChannels, FetchUsers, NetworkCommand, NetworkEvent, ServerHello,
+};
+use shared_utils::{NamedProjectDirs, TildeRelativePathBuf, first_match};
 
 use crate::client_event::InitialSync;
 
@@ -257,7 +258,7 @@ impl ChatBackend {
     /// Handle a `ClientCommand` coming from the frontend.
     async fn handle_command(&mut self, command: ClientCommand) -> ControlFlow<()> {
         match command {
-            ClientCommand::Connect(host, port) => self.connect(host, port).await,
+            ClientCommand::Connect(params) => self.connect(params).await,
             ClientCommand::Disconnect => self.disconnect().await,
             ClientCommand::Quit => return ControlFlow::Break(()),
             ClientCommand::NetworkCommand(net_cmd) => self.send_network_command(net_cmd).await,
@@ -276,18 +277,26 @@ impl ChatBackend {
         self.send_ui_event(event).await;
     }
 
-    /// Attempt to connect to the server at `host:port`. The UI will be notified about whether the
-    /// connection is successful or not.
-    async fn connect(&mut self, host: String, port: Option<u16>) {
-        let mut connection = match Connection::connect(&host, port, &self.tls_connector).await {
-            Ok(conn) => conn,
-            Err(e) => {
-                self.send_ui_error(e.into()).await;
-                return;
-            }
+    /// Attempt to connect to the server at using the given `ConnectParams`. The UI will be notified
+    /// about whether the connection is successful or not.
+    async fn connect(&mut self, params: ConnectParams) {
+        let mut connection =
+            match Connection::connect(&params.host, params.port, &self.tls_connector).await {
+                Ok(conn) => conn,
+                Err(e) => {
+                    self.send_ui_error(e.into()).await;
+                    return;
+                }
+            };
+
+        let client_hello = ClientHello {
+            requested_name: params.initial_username,
         };
 
-        if let Err(e) = connection.send_command(NetworkCommand::ClientHello).await {
+        if let Err(e) = connection
+            .send_command(NetworkCommand::ClientHello(client_hello))
+            .await
+        {
             todo!("Log failed connection");
         }
 

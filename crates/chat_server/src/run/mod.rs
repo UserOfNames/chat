@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::Context;
 use clap::Args;
-use dashmap::DashMap;
+use dashmap::{DashMap, DashSet};
 use figment::{
     Figment,
     providers::{Env, Format, Serialized, Toml},
@@ -92,10 +92,21 @@ struct Channel {
 /// State shared between all tasks.
 #[derive(Debug)]
 struct ServerState {
+    /// The default channel's ID.
     default_channel_id: Option<ChannelId>,
+
+    /// Broadcast sender to send an event to all connected clients.
     global_broadcast: broadcast::Sender<NetworkEvent>,
+
+    /// Map from channel IDs to channels.
     channels: DashMap<ChannelId, Channel>,
+
+    /// Map from user IDs to users.
     users: DashMap<UserId, User>,
+
+    /// Set of all connected users' names. Used for fast, atomic lookups to enforce username
+    /// uniqueness.
+    taken_names: DashSet<String>,
 }
 
 impl ServerState {
@@ -106,6 +117,7 @@ impl ServerState {
             global_broadcast: broadcast::channel(128).0, // TODO: Buffer size
             channels: DashMap::new(),
             users: DashMap::new(),
+            taken_names: DashSet::new(),
         }
     }
 }

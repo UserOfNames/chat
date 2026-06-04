@@ -60,7 +60,7 @@ message SendMessage {
 
 // Request to connect to the server.
 message ClientHello {
-  google.protobuf.Empty hello = 1;
+  string requested_name = 1;
 }
 
 // ======================================================

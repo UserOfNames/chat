@@ -26,7 +26,9 @@ struct ConnectionGuard {
 
 impl Drop for ConnectionGuard {
     fn drop(&mut self) {
-        self.server_state.users.remove(&self.user_id);
+        if let Some((_, user)) = self.server_state.users.remove(&self.user_id) {
+            self.server_state.taken_names.remove(&user.info.name);
+        }
 
         // The only failure condition for sending through a broadcast channel is if there are no
         // receivers, but we don't actually care if nobody gets this message. As such, we ignore
@@ -84,7 +86,6 @@ impl Connection {
         cancellation_token: CancellationToken,
     ) {
         let user_id = UserId(Uuid::now_v7());
-        let user_name = "TODO DISPLAY NAMES".to_owned();
 
         let client_stream = match tls_acceptor.accept(client_stream).await {
             Ok(stream) => stream,
@@ -95,13 +96,20 @@ impl Connection {
         };
         let mut client_stream = Framed::new(client_stream, ServerCodec);
 
-        // We want to finish the ClientHello -> ServerHello handshake before anything else
-        // This match is just a guard clause, verifying that we get what we need
-        match client_stream.next().await {
-            Some(Ok(NetworkCommand::ClientHello)) => {}
+        // We want to finish the ClientHello -> ServerHello handshake before anything else.
+        // NOTE: For now, if the handshake fails for any reason, we just abort the connection
+        // entirely. This keeps the implementation far simpler, at the cost of potentially repeating
+        // the TLS handshake. If this becomes a problem later, we'll fix it later.
+        let hello = match client_stream.next().await {
+            Some(Ok(NetworkCommand::ClientHello(hello))) => hello,
             Some(Ok(other)) => todo!("Log error: bad handshake: unexpected command {other:?}"),
             Some(Err(e)) => todo!("Log error: bad handshake: error {e}"),
             None => todo!("Log error: bad handshake: stream closed"),
+        };
+
+        // Atomically insert our name + check if it's already taken.
+        if !server_state.taken_names.insert(hello.requested_name.clone()) {
+            todo!("Report taken username to client, log, abort");
         }
 
         if let Err(e) = client_stream
@@ -137,7 +145,7 @@ impl Connection {
 
         let user_info = UserInfo {
             id: user_id,
-            name: user_name,
+            name: hello.requested_name,
         };
 
         let user = User {
@@ -234,7 +242,7 @@ impl Connection {
 
     async fn handle_command(&mut self, command: NetworkCommand) {
         match command {
-            NetworkCommand::ClientHello => todo!("Log error: double hello"),
+            NetworkCommand::ClientHello(_) => todo!("Log error: double hello"),
 
             NetworkCommand::FetchChannels(_fetch) => {
                 self.send_event_to_client(NetworkEvent::ChannelSync(ChannelSync {

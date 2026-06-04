@@ -7,7 +7,7 @@ mod network_command;
 mod network_event;
 
 pub use network_command::{
-    FetchChannels, FetchUsers, NetworkCommand, SendDestination, SendMessage,
+    ClientHello, FetchChannels, FetchUsers, NetworkCommand, SendDestination, SendMessage,
 };
 
 pub use network_event::{

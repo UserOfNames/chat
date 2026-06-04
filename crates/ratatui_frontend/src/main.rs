@@ -233,9 +233,8 @@ impl App {
                 self.popups.pop();
             }
 
-            Action::Connect(host, port) => {
-                self.send_to_backend(ClientCommand::Connect(host, port))
-                    .await;
+            Action::Connect(params) => {
+                self.send_to_backend(ClientCommand::Connect(params)).await;
                 self.popups.clear();
             }
 
