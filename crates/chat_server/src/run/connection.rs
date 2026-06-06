@@ -115,10 +115,25 @@ impl Connection {
             None => todo!("Log error: bad handshake: stream closed"),
         };
 
-        // Atomically insert our name + check if it's already taken.
+        let requested_name = hello.requested_name.trim().to_owned();
+
+        if requested_name.len() > 30 {
+            todo!("Log error, report, abort (username too long)");
+        }
+
+        if !requested_name
+            .chars()
+            .all(|c| c.is_alphanumeric() || ['_', '-'].contains(&c))
+        {
+            todo!("Log error, report, abort (username invalid)");
+        }
+
+        // Atomically insert our name + check if it's already taken. We normalize capitalization to
+        // block capital variations on the same name (e.g. "Bob" vs. "BOB"), but the actual display
+        // name retains its original format.
         if !server_state
             .taken_names
-            .insert(hello.requested_name.clone())
+            .insert(hello.requested_name.to_lowercase())
         {
             todo!("Report taken username to client, log, abort");
         }
