@@ -87,6 +87,14 @@ impl Connection {
     ) {
         let user_id = UserId(Uuid::now_v7());
 
+        // It's important that we create the guard before anything else, or else there may be a gap
+        // that allows ghost state to accumulate.
+        #[allow(clippy::used_underscore_binding)]
+        let _guard = ConnectionGuard {
+            user_id,
+            server_state: server_state.clone(),
+        };
+
         let client_stream = match tls_acceptor.accept(client_stream).await {
             Ok(stream) => stream,
             Err(e) => {
@@ -115,6 +123,7 @@ impl Connection {
             todo!("Report taken username to client, log, abort");
         }
 
+        // Send Hello to the client.
         if let Err(e) = client_stream
             .send(NetworkEvent::ServerHello(ServerHello {
                 your_id: user_id,
@@ -124,14 +133,6 @@ impl Connection {
         {
             todo!("Log error: error sending ServerHello: {e}");
         }
-
-        // It's important that we create the guard before registering, or else there is a gap
-        // between when the connection is registered and when the guard is active
-        #[allow(clippy::used_underscore_binding)]
-        let _guard = ConnectionGuard {
-            user_id,
-            server_state: server_state.clone(),
-        };
 
         // Subscribe to all the server's channels
         let channels: StreamMap<_, _> = server_state
