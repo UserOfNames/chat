@@ -61,6 +61,6 @@ impl Popup for NoticePopup {
     }
 
     fn hint_size(&self) -> SizeHint {
-        (SizeKind::Percentage(60), SizeKind::Percentage(40)) // TODO: Dynamic sizing
+        (SizeKind::Percentage(50), SizeKind::Percentage(30)) // TODO: Dynamic sizing
     }
 }

@@ -9,14 +9,16 @@ use ratatui::{
 
 use super::{
     Action, KeyHandler, Popup, SizeHint, SizeKind, connect::ConnectPopup, quit::QuitPopup,
+    update_info::UpdateInfoPopup,
 };
 
 const HEADER_STRS: [&str; 2] = ["Key", "Action"];
 
-const ROW_STRS: [(&str, &str); 3] = [
+const ROW_STRS: [(&str, &str); 4] = [
     ("Esc", "Close this menu."),
     ("q", "Quit the application."),
     ("c", "Connect to a server."),
+    ("u", "Update your information."),
 ];
 
 const COLUMN_SPACING: u16 = 5;
@@ -57,6 +59,7 @@ impl KeyHandler for CommandsPopup {
             KeyCode::Esc => Action::PopPopup,
             KeyCode::Char('q') => Action::PushPopup(QuitPopup::create()),
             KeyCode::Char('c') => Action::PushPopup(ConnectPopup::create()),
+            KeyCode::Char('u') => Action::PushPopup(UpdateInfoPopup::create()),
             _ => Action::None,
         }
     }

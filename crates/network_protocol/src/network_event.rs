@@ -132,10 +132,8 @@ impl TryFrom<proto::ChannelInfo> for ChannelInfo {
     type Error = io::Error;
 
     fn try_from(value: proto::ChannelInfo) -> Result<Self, Self::Error> {
-        let id = value.id.ok_or_else(io_err_invalid_data)?.try_into()?;
-
         Ok(Self {
-            id,
+            id: value.id.try_into()?,
             name: value.name,
         })
     }
@@ -144,7 +142,7 @@ impl TryFrom<proto::ChannelInfo> for ChannelInfo {
 impl From<ChannelInfo> for proto::ChannelInfo {
     fn from(value: ChannelInfo) -> Self {
         Self {
-            id: Some(value.id.into()),
+            id: value.id.into(),
             name: value.name,
         }
     }
@@ -236,6 +234,69 @@ impl From<UserSync> for proto::UserSync {
     }
 }
 
+/// The type of `ErrorEvent` that occurred.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[non_exhaustive]
+pub enum ErrorKind {
+    Unknown,
+    NameTaken,
+    InvalidName,
+}
+
+impl TryFrom<i32> for ErrorKind {
+    type Error = ();
+
+    fn try_from(value: i32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Self::Unknown),
+            1 => Ok(Self::NameTaken),
+            2 => Ok(Self::InvalidName),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<ErrorKind> for i32 {
+    fn from(value: ErrorKind) -> Self {
+        match value {
+            ErrorKind::Unknown => 0,
+            ErrorKind::NameTaken => 1,
+            ErrorKind::InvalidName => 2,
+        }
+    }
+}
+
+/// An event indicating an error occured on the server.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ErrorEvent {
+    pub kind: ErrorKind,
+    pub message: String,
+}
+
+impl TryFrom<proto::ErrorEvent> for ErrorEvent {
+    type Error = io::Error;
+
+    fn try_from(value: proto::ErrorEvent) -> Result<Self, Self::Error> {
+        let kind: ErrorKind = value.code.try_into().map_err(|()| io_err_invalid_data())?;
+
+        Ok(Self {
+            kind,
+            message: value.message,
+        })
+    }
+}
+
+impl From<ErrorEvent> for proto::ErrorEvent {
+    fn from(value: ErrorEvent) -> Self {
+        Self {
+            code: value.kind.into(),
+            message: value.message,
+        }
+    }
+}
+
 /// An event sent from the server to the client backend.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -255,8 +316,13 @@ pub enum NetworkEvent {
     /// A user left the server.
     UserLeft(UserId),
 
+    /// A user's information changed.
+    UserInfoUpdated(UserInfo),
+
     /// Received a message from some other connected client.
     ReceivedMessage(ReceivedMessage),
+
+    ErrorEvent(ErrorEvent),
 }
 
 impl TryFrom<EventFrame> for NetworkEvent {
@@ -276,9 +342,13 @@ impl TryFrom<EventFrame> for NetworkEvent {
 
             Variant::UserLeft(user_id) => Ok(Self::UserLeft(user_id.try_into()?)),
 
+            Variant::UserInfoUpdated(user_info) => Ok(Self::UserInfoUpdated(user_info.try_into()?)),
+
             Variant::ReceivedMessage(message) => {
                 Ok(NetworkEvent::ReceivedMessage(message.try_into()?))
             }
+
+            Variant::ErrorEvent(error) => Ok(NetworkEvent::ErrorEvent(error.try_into()?)),
         }
     }
 }
@@ -308,8 +378,16 @@ impl From<NetworkEvent> for EventFrame {
                 variant: Some(Variant::UserLeft(user_id.into())),
             },
 
-            NetworkEvent::ReceivedMessage(message) => EventFrame {
+            NetworkEvent::UserInfoUpdated(user_info) => Self {
+                variant: Some(Variant::UserInfoUpdated(user_info.into())),
+            },
+
+            NetworkEvent::ReceivedMessage(message) => Self {
                 variant: Some(Variant::ReceivedMessage(message.into())),
+            },
+
+            NetworkEvent::ErrorEvent(error) => Self {
+                variant: Some(Variant::ErrorEvent(error.into())),
             },
         }
     }

@@ -1,27 +1,20 @@
 syntax = "proto3";
 package network_protocol.items;
 
-import "google/protobuf/empty.proto";
-
+// We wrap this to allow changing the representation of UUIDs in the future.
+// For example, if protobuf ever adds native fixed128s, that would be a
+// superior format.
 message Uuid {
   bytes value = 1;
 }
 
-message ChannelId {
-  uint64 id = 1;
-}
-
-message UserId {
-  Uuid id = 1;
-}
-
 message ChannelInfo {
-  ChannelId id = 1;
+  uint64 id = 1; // ChannelId
   string name = 2;
 }
 
 message UserInfo {
-  UserId id = 1;
+  Uuid id = 1; // UserId
   string name = 2;
 }
 
@@ -37,24 +30,7 @@ message CommandFrame {
     FetchUsers fetch_users = 3;
 
     SendMessage send_message = 4;
-  }
-}
-
-message FetchChannels {
-  google.protobuf.Empty empty = 1;
-}
-
-message FetchUsers {
-  google.protobuf.Empty empty = 1;
-}
-
-// Request to send a message to a channel or other users.
-message SendMessage {
-  string contents = 1;
-  
-  oneof destination {
-    ChannelId channel_id = 2;
-    UserId user_id = 3;
+    UpdateInfo update_info = 5;
   }
 }
 
@@ -63,12 +39,38 @@ message ClientHello {
   string requested_name = 1;
 }
 
+// NOTE: These may contain pagination data in the future. Since pagination
+// isn't currently implemented, and it's not certain whether we will implement
+// it, they are empty for now.
+message FetchChannels {}
+message FetchUsers {}
+
+// Request to send a message to a channel or other users.
+message SendMessage {
+  string contents = 1;
+  
+  oneof destination {
+    uint64 channel_id = 2; // ChannelId
+    Uuid user_id = 3; // UserId
+  }
+}
+
+// Request to update your user information.
+message UpdateInfo {
+  // All the fields are optional so the user can granularly select what info to
+  // update.
+  optional string new_name = 1;
+}
+
 // ======================================================
 // ======================= EVENTS =======================
 // ======================================================
 
 // Frame for network-bound events, sent from the server to the client backend.
 message EventFrame {
+  reserved 7, 8, 9;
+  reserved "channel_added", "channel_removed", "channel_changed_name";
+
   oneof variant {
     ServerHello server_hello = 1;
 
@@ -76,34 +78,30 @@ message EventFrame {
     UserSync user_sync = 3;
 
     UserInfo user_joined = 4;
-    UserId user_left = 5;
+    Uuid user_left = 5; // UserId
+    UserInfo user_info_updated = 6;
 
-    // RESERVED: User changed name, channel added, channel removed, channel changed name
+    ReceivedMessage received_message = 10;
 
-    ReceivedMessage received_message = 9;
+    ErrorEvent error_event = 11;
   }
 }
 
 // Client-bound chat message.
 message ReceivedMessage {
-  string contents = 1;
-  UserId sender_id = 2;
+  string contents = 2;
+  Uuid sender_id = 3; // UserId
 
   oneof destination {
-    UserId user_id = 3;
-    ChannelId channel_id = 4;
+    Uuid user_id = 4; // UserId
+    uint64 channel_id = 5; // ChannelId
   }
-}
-
-// A user changed their display name.
-message UserChangedName {
-  UserInfo new_user_info = 1;
 }
 
 // Initial message to give the client session info and state.
 message ServerHello {
-  UserId your_id = 1;
-  optional ChannelId default_channel_id = 2;
+  Uuid your_id = 1; // UserId
+  optional uint64 default_channel_id = 2; // ChannelId
 }
 
 // Message to sync information about channels on the server.
@@ -114,4 +112,16 @@ message ChannelSync {
 // Message to sync information about users on the server.
 message UserSync {
   repeated UserInfo users = 1;
+}
+
+// An event indicating some error on the server.
+message ErrorEvent {
+  enum ErrorCode {
+    UNKNOWN = 0;
+    NAME_TAKEN = 1;
+    INVALID_NAME = 2;
+  }
+
+  ErrorCode code = 1;
+  string message = 2;
 }

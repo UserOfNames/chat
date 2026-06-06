@@ -19,10 +19,13 @@ pub struct ConnectParams {
 pub enum ClientCommand {
     /// Connect to a server using the given parameters.
     Connect(ConnectParams),
+
     /// Disconnect from the currently connected server. This is a NOP if not connected to a server.
     Disconnect,
+
     /// Shut down the backend.
     Quit,
+
     /// Commands which pass on to the network.
     NetworkCommand(NetworkCommand),
 }

@@ -205,7 +205,8 @@ impl Popup for ConnectPopup {
             Span::styled("Next: Tab/↓", Style::default().blue()),
             Span::raw(" • "),
             Span::styled("Prev: ↑", Style::default().blue()),
-        ]).alignment(Alignment::Center);
+        ])
+        .alignment(Alignment::Center);
 
         help_line.render(areas[0], buf);
 

@@ -1,7 +1,10 @@
 pub mod main_panel;
 pub mod popups;
 
-use chat_backend::{client_command::ConnectParams, network_protocol::{ChannelId, UserId}};
+use chat_backend::{
+    client_command::ConnectParams,
+    network_protocol::{ChannelId, UpdateInfo, UserId},
+};
 use crossterm::event::KeyEvent;
 
 use popups::Popup;
@@ -14,8 +17,9 @@ pub enum Action {
     PopPopup,
     Connect(ConnectParams),
     SendMessage(String),
-    YieldFocus,
+    UpdateInfo(UpdateInfo),
 
+    YieldFocus,
     SelectChannel(ChannelId),
     SelectUser(UserId),
 }

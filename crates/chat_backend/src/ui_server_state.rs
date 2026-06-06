@@ -74,8 +74,6 @@ impl UIServerState {
     /// * [`ClientEvent::ServerShutDown`]: This should result in the total destruction of [`Self`].
     pub fn update_from_event(&mut self, event: ClientEvent) {
         match event {
-            ClientEvent::InitialSync(sync) => todo!("Log error (should not sync twice)"),
-
             ClientEvent::UserSync(sync) => {
                 for UserInfo { id, name } in sync.users {
                     self.users.insert(id, name);
@@ -104,6 +102,13 @@ impl UIServerState {
 
             ClientEvent::ReceivedMessage(message) => self.push_message(message),
 
+            ClientEvent::UserInfoUpdated(info) => self.update_info(info),
+
+            // Currently, no server errors demand a state update on the client side. Because this
+            // may change in the future, we make this a NOP instead of an error.
+            ClientEvent::ErrorEvent(_) => {}
+
+            ClientEvent::InitialSync(_) => todo!("Log error (should not sync twice)"),
             ClientEvent::Disconnected => todo!("Log error (destroy self)"),
             ClientEvent::ServerShutDown => todo!("Log error (destroy self)"),
         }
@@ -129,6 +134,11 @@ impl UIServerState {
             .entry(context)
             .or_insert(Vec::with_capacity(128))
             .push(message);
+    }
+
+    /// Update a user's info.
+    fn update_info(&mut self, new_info: UserInfo) {
+        self.users.insert(new_info.id, new_info.name);
     }
 
     /// Get the name of a channel with the given ID, if known.

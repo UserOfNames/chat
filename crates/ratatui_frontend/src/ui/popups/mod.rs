@@ -2,6 +2,7 @@ pub mod commands;
 pub mod connect;
 pub mod notice;
 pub mod quit;
+pub mod update_info;
 
 use ratatui::{
     buffer::Buffer,

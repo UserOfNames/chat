@@ -10,6 +10,70 @@ use crate::{
 
 type ProtoSendDestination = send_message::Destination;
 
+/// First message from the client to the server, indicating a desire to connect and requesting the
+/// given username.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ClientHello {
+    pub requested_name: String,
+}
+
+impl TryFrom<proto::ClientHello> for ClientHello {
+    type Error = io::Error;
+
+    fn try_from(value: proto::ClientHello) -> Result<Self, Self::Error> {
+        Ok(Self {
+            requested_name: value.requested_name,
+        })
+    }
+}
+
+impl From<ClientHello> for proto::ClientHello {
+    fn from(value: ClientHello) -> Self {
+        Self {
+            requested_name: value.requested_name,
+        }
+    }
+}
+
+/// A request to fetch the server's channel list in bulk.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct FetchChannels;
+
+impl TryFrom<proto::FetchChannels> for FetchChannels {
+    type Error = io::Error;
+
+    fn try_from(_: proto::FetchChannels) -> Result<Self, Self::Error> {
+        Ok(Self {})
+    }
+}
+
+impl From<FetchChannels> for proto::FetchChannels {
+    fn from(_: FetchChannels) -> Self {
+        Self {}
+    }
+}
+
+/// A request to fetch the server's user list in bulk.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct FetchUsers;
+
+impl TryFrom<proto::FetchUsers> for FetchUsers {
+    type Error = io::Error;
+
+    fn try_from(_: proto::FetchUsers) -> Result<Self, Self::Error> {
+        Ok(Self {})
+    }
+}
+
+impl From<FetchUsers> for proto::FetchUsers {
+    fn from(_: FetchUsers) -> Self {
+        Self {}
+    }
+}
+
 /// Where to send a chat message.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -38,44 +102,6 @@ impl From<SendDestination> for ProtoSendDestination {
             SendDestination::Channel(id) => Self::ChannelId(id.into()),
             SendDestination::User(id) => Self::UserId(id.into()),
         }
-    }
-}
-
-/// A request to fetch the server's channel list in bulk.
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct FetchChannels;
-
-impl TryFrom<proto::FetchChannels> for FetchChannels {
-    type Error = io::Error;
-
-    fn try_from(_: proto::FetchChannels) -> Result<Self, Self::Error> {
-        Ok(Self {})
-    }
-}
-
-impl From<FetchChannels> for proto::FetchChannels {
-    fn from(_: FetchChannels) -> Self {
-        Self { empty: Some(()) }
-    }
-}
-
-/// A request to fetch the server's user list in bulk.
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct FetchUsers;
-
-impl TryFrom<proto::FetchUsers> for FetchUsers {
-    type Error = io::Error;
-
-    fn try_from(_: proto::FetchUsers) -> Result<Self, Self::Error> {
-        Ok(Self {})
-    }
-}
-
-impl From<FetchUsers> for proto::FetchUsers {
-    fn from(_: FetchUsers) -> Self {
-        Self { empty: Some(()) }
     }
 }
 
@@ -115,28 +141,27 @@ impl From<SendMessage> for proto::SendMessage {
     }
 }
 
-/// First message from the client to the server, indicating a desire to connect and requesting the
-/// given username.
+/// User information to update.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ClientHello {
-    pub requested_name: String,
+pub struct UpdateInfo {
+    pub name: Option<String>,
 }
 
-impl TryFrom<proto::ClientHello> for ClientHello {
+impl TryFrom<proto::UpdateInfo> for UpdateInfo {
     type Error = io::Error;
 
-    fn try_from(value: proto::ClientHello) -> Result<Self, Self::Error> {
+    fn try_from(value: proto::UpdateInfo) -> Result<Self, Self::Error> {
         Ok(Self {
-            requested_name: value.requested_name,
+            name: value.new_name,
         })
     }
 }
 
-impl From<ClientHello> for proto::ClientHello {
-    fn from(value: ClientHello) -> Self {
+impl From<UpdateInfo> for proto::UpdateInfo {
+    fn from(value: UpdateInfo) -> Self {
         Self {
-            requested_name: value.requested_name,
+            new_name: value.name,
         }
     }
 }
@@ -156,6 +181,9 @@ pub enum NetworkCommand {
 
     /// Send the given message.
     SendMessage(SendMessage),
+
+    /// Update your info.
+    UpdateInfo(UpdateInfo),
 }
 
 impl TryFrom<CommandFrame> for NetworkCommand {
@@ -172,6 +200,8 @@ impl TryFrom<CommandFrame> for NetworkCommand {
             Variant::FetchUsers(fetch) => Ok(NetworkCommand::FetchUsers(fetch.try_into()?)),
 
             Variant::SendMessage(message) => Ok(NetworkCommand::SendMessage(message.try_into()?)),
+
+            Variant::UpdateInfo(info) => Ok(NetworkCommand::UpdateInfo(info.try_into()?)),
         }
     }
 }
@@ -195,6 +225,10 @@ impl From<NetworkCommand> for CommandFrame {
 
             NetworkCommand::SendMessage(message) => CommandFrame {
                 variant: Some(Variant::SendMessage(message.into())),
+            },
+
+            NetworkCommand::UpdateInfo(info) => CommandFrame {
+                variant: Some(Variant::UpdateInfo(info.into())),
             },
         }
     }

@@ -3,7 +3,7 @@ use std::sync::Arc;
 use futures::{SinkExt, StreamExt};
 use network_protocol::{
     ChannelSync, NetworkCommand, NetworkEvent, ReceiveDestination, ReceivedMessage,
-    SendDestination, SendMessage, ServerHello, UserInfo, UserSync, codecs::ServerCodec,
+    SendDestination, SendMessage, ServerHello, UpdateInfo, UserInfo, UserSync, codecs::ServerCodec,
 };
 use tokio::{
     io::AsyncWriteExt,
@@ -108,7 +108,10 @@ impl Connection {
         };
 
         // Atomically insert our name + check if it's already taken.
-        if !server_state.taken_names.insert(hello.requested_name.clone()) {
+        if !server_state
+            .taken_names
+            .insert(hello.requested_name.clone())
+        {
             todo!("Report taken username to client, log, abort");
         }
 
@@ -269,6 +272,14 @@ impl Connection {
             }
 
             NetworkCommand::SendMessage(msg) => self.send_message(msg).await,
+
+            NetworkCommand::UpdateInfo(info) => self.update_info(info),
+        }
+    }
+
+    async fn send_event_to_client(&mut self, event: NetworkEvent) {
+        if let Err(e) = self.client_stream.send(event).await {
+            todo!("Log error, report to sender");
         }
     }
 
@@ -328,9 +339,26 @@ impl Connection {
         }
     }
 
-    async fn send_event_to_client(&mut self, event: NetworkEvent) {
-        if let Err(e) = self.client_stream.send(event).await {
-            todo!("Log error, report to sender");
+    fn update_info(&mut self, new_info: UpdateInfo) {
+        let Some(mut user_entry) = self.server_state.users.get_mut(&self.user_id) else {
+            todo!("Log error: unexplainable state mismatch? Probably unrecoverable?");
+        };
+
+        if let Some(new_name) = new_info.name {
+            if !self.server_state.taken_names.insert(new_name.clone()) {
+                todo!("Report taken username to client");
+            }
+
+            user_entry.info.name = new_name;
         }
+
+        // The user's input was updated in-place, so it's now fully updated. We clone it out to send
+        // back to the client for the update event.
+        let event = NetworkEvent::UserInfoUpdated(user_entry.info.clone());
+
+        // The only failure condition for sending through a broadcast channel is if there are no
+        // receivers, but we don't actually care if nobody gets this message. As such, we ignore
+        // this error.
+        let _: Result<_, _> = self.server_state.global_broadcast.send(event);
     }
 }

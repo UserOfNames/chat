@@ -8,11 +8,12 @@ mod network_event;
 
 pub use network_command::{
     ClientHello, FetchChannels, FetchUsers, NetworkCommand, SendDestination, SendMessage,
+    UpdateInfo,
 };
 
 pub use network_event::{
-    ChannelInfo, ChannelSync, NetworkEvent, ReceiveDestination, ReceivedMessage, ServerHello,
-    UserInfo, UserSync,
+    ChannelInfo, ChannelSync, ErrorEvent, ErrorKind, NetworkEvent, ReceiveDestination,
+    ReceivedMessage, ServerHello, UserInfo, UserSync,
 };
 
 use std::fmt::{self, Display, Formatter};
@@ -55,21 +56,17 @@ impl From<Uuid> for proto::Uuid {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserId(pub Uuid);
 
-impl TryFrom<proto::UserId> for UserId {
+impl TryFrom<proto::Uuid> for UserId {
     type Error = io::Error;
 
-    fn try_from(value: proto::UserId) -> Result<Self, Self::Error> {
-        let value = value.id.ok_or_else(io_err_invalid_data)?.try_into()?;
-
-        Ok(UserId(value))
+    fn try_from(value: proto::Uuid) -> Result<Self, Self::Error> {
+        Ok(Self(value.try_into()?))
     }
 }
 
-impl From<UserId> for proto::UserId {
+impl From<UserId> for proto::Uuid {
     fn from(value: UserId) -> Self {
-        Self {
-            id: Some(value.0.into()),
-        }
+        value.0.into()
     }
 }
 
@@ -92,17 +89,19 @@ impl Display for UserId {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ChannelId(u64);
 
-impl TryFrom<proto::ChannelId> for ChannelId {
+// Even though this conversion is infallible, to maintain consistence with all other wire -> domain
+// conversion impls, this is TryFrom anyways.
+impl TryFrom<u64> for ChannelId {
     type Error = io::Error;
 
-    fn try_from(value: proto::ChannelId) -> Result<Self, Self::Error> {
-        Ok(ChannelId(value.id))
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
+        Ok(Self(value))
     }
 }
 
-impl From<ChannelId> for proto::ChannelId {
+impl From<ChannelId> for u64 {
     fn from(value: ChannelId) -> Self {
-        Self { id: value.0 }
+        value.0
     }
 }
 

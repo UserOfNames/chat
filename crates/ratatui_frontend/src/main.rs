@@ -226,7 +226,9 @@ impl App {
     async fn apply_action(&mut self, action: Action) {
         match action {
             Action::None => {}
+
             Action::Quit => self.quit().await,
+
             Action::PushPopup(popup) => self.popups.push(popup),
 
             Action::PopPopup => {
@@ -234,7 +236,8 @@ impl App {
             }
 
             Action::Connect(params) => {
-                self.send_to_backend(ClientCommand::Connect(params)).await;
+                let command = ClientCommand::Connect(params);
+                self.send_to_backend(command).await;
                 self.popups.clear();
             }
 
@@ -272,6 +275,17 @@ impl App {
                     .await;
             }
 
+            Action::UpdateInfo(info) => {
+                let command = NetworkCommand::UpdateInfo(info);
+                self.send_to_backend(ClientCommand::NetworkCommand(command))
+                    .await;
+
+                self.popups.clear();
+            }
+
+            // Yielding at the top-level focus is a NOP
+            Action::YieldFocus => {}
+
             Action::SelectChannel(id) => {
                 // Selecting a channel when not connected is a NOP.
                 let Some(state) = &mut self.ui_server_state else {
@@ -289,9 +303,6 @@ impl App {
 
                 state.message_context = Some(MessageContext::User(id));
             }
-
-            // Yielding at the top-level focus is a NOP
-            Action::YieldFocus => {}
         }
     }
 
