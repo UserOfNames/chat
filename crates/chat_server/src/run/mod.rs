@@ -1,5 +1,6 @@
 mod connection;
 mod listener;
+mod server_state;
 
 use std::{
     net::{IpAddr, SocketAddr},
@@ -9,12 +10,11 @@ use std::{
 
 use anyhow::Context;
 use clap::Args;
-use dashmap::{DashMap, DashSet};
 use figment::{
     Figment,
     providers::{Env, Format, Serialized, Toml},
 };
-use network_protocol::{ChannelId, ChannelInfo, NetworkEvent, UserId, UserInfo};
+use network_protocol::{ChannelInfo, NetworkEvent, UserId, UserInfo};
 use rustls::{
     ServerConfig,
     pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
@@ -26,6 +26,7 @@ use tokio_rustls::TlsAcceptor;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use listener::Listener;
+use server_state::ServerState;
 
 use crate::{DEFAULT_CONFIG, DefaultPaths, ENV_VAR_PREFIX};
 
@@ -76,50 +77,17 @@ struct Config {
 }
 
 /// Represents a connected user.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct User {
     pub info: UserInfo,
     pub sender: mpsc::Sender<NetworkEvent>,
 }
 
 /// Represents a channel.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Channel {
     pub info: ChannelInfo,
     pub broadcast: broadcast::Sender<NetworkEvent>,
-}
-
-/// State shared between all tasks.
-#[derive(Debug)]
-struct ServerState {
-    /// The default channel's ID.
-    default_channel_id: Option<ChannelId>,
-
-    /// Broadcast sender to send an event to all connected clients.
-    global_broadcast: broadcast::Sender<NetworkEvent>,
-
-    /// Map from channel IDs to channels.
-    channels: DashMap<ChannelId, Channel>,
-
-    /// Map from user IDs to users.
-    users: DashMap<UserId, User>,
-
-    /// Set of all connected users' names. Used for fast, atomic lookups to enforce username
-    /// uniqueness.
-    taken_names: DashSet<String>,
-}
-
-impl ServerState {
-    /// Initialize a `ServerState` instance.
-    fn new(default_channel_id: Option<ChannelId>) -> Self {
-        Self {
-            default_channel_id,
-            global_broadcast: broadcast::channel(128).0, // TODO: Buffer size
-            channels: DashMap::new(),
-            users: DashMap::new(),
-            taken_names: DashSet::new(),
-        }
-    }
 }
 
 /// A chat server. To start the server, first initialize it with `new()`. Then, call `run()`.
@@ -165,13 +133,9 @@ impl ChatServer {
         for channel_info in config.channels {
             let (tx, _rx) = broadcast::channel(128); // TODO: Buffer size
 
-            server_state.channels.insert(
-                channel_info.id,
-                Channel {
-                    info: channel_info,
-                    broadcast: tx,
-                },
-            );
+            if let Err(e) = server_state.add_channel(channel_info.id, channel_info.name, tx) {
+                todo!("Log error and return: {e}");
+            }
         }
 
         Ok(Self {

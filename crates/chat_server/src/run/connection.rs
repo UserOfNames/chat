@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
-use futures::{SinkExt, StreamExt};
+use futures::{
+    SinkExt, StreamExt,
+    stream::{SelectAll, select_all},
+};
 use network_protocol::{
     ChannelSync, NetworkCommand, NetworkEvent, ReceiveDestination, ReceivedMessage,
-    SendDestination, SendMessage, ServerHello, UpdateInfo, UserInfo, UserSync, codecs::ServerCodec,
+    SendDestination, SendMessage, ServerHello, UpdateInfo, UserSync, codecs::ServerCodec,
 };
 use tokio::{
     io::AsyncWriteExt,
@@ -11,11 +14,11 @@ use tokio::{
     sync::{broadcast, mpsc},
 };
 use tokio_rustls::{TlsAcceptor, server::TlsStream};
-use tokio_stream::{StreamMap, wrappers::BroadcastStream};
+use tokio_stream::wrappers::BroadcastStream;
 use tokio_util::{codec::Framed, sync::CancellationToken};
 use uuid::Uuid;
 
-use crate::run::{ChannelId, ServerState, User, UserId};
+use crate::run::{ServerState, UserId, server_state::UserError};
 
 /// RAII guard that automatically unregisters a user when dropped.
 #[derive(Debug)]
@@ -26,17 +29,12 @@ struct ConnectionGuard {
 
 impl Drop for ConnectionGuard {
     fn drop(&mut self) {
-        if let Some((_, user)) = self.server_state.users.remove(&self.user_id) {
-            self.server_state.taken_names.remove(&user.info.name);
+        match self.server_state.remove_user(self.user_id) {
+            Err(UserError::DoesNotExist(_)) => {}
+            _ => self
+                .server_state
+                .send_global_event(NetworkEvent::UserLeft(self.user_id)),
         }
-
-        // The only failure condition for sending through a broadcast channel is if there are no
-        // receivers, but we don't actually care if nobody gets this message. As such, we ignore
-        // this error.
-        let _: Result<_, _> = self
-            .server_state
-            .global_broadcast
-            .send(NetworkEvent::UserLeft(self.user_id));
     }
 }
 
@@ -60,8 +58,7 @@ pub struct Connection {
     event_rx: mpsc::Receiver<NetworkEvent>,
 
     /// Unified receiver stream for all channels on the server.
-    // TODO: Do I need the channel ID at all, or can I remove it to save space?
-    channels: StreamMap<ChannelId, BroadcastStream<NetworkEvent>>,
+    channels: SelectAll<BroadcastStream<NetworkEvent>>,
 
     /// Cancellation token for the main task to signal for shutdown.
     cancellation_token: CancellationToken,
@@ -115,34 +112,18 @@ impl Connection {
             None => todo!("Log error: bad handshake: stream closed"),
         };
 
-        let requested_name = hello.requested_name.trim().to_owned();
+        let (event_tx, event_rx) = mpsc::channel::<NetworkEvent>(128); // TODO: Buffer size
 
-        if requested_name.len() > 30 {
-            todo!("Log error, report, abort (username too long)");
-        }
-
-        if !requested_name
-            .chars()
-            .all(|c| c.is_alphanumeric() || ['_', '-'].contains(&c))
-        {
-            todo!("Log error, report, abort (username invalid)");
-        }
-
-        // Atomically insert our name + check if it's already taken. We normalize capitalization to
-        // block capital variations on the same name (e.g. "Bob" vs. "BOB"), but the actual display
-        // name retains its original format.
-        if !server_state
-            .taken_names
-            .insert(hello.requested_name.to_lowercase())
-        {
-            todo!("Report taken username to client, log, abort");
+        // TODO: Make max length configurable
+        if let Err(e) = server_state.handle_new_user(user_id, hello.requested_name, 20, event_tx) {
+            todo!("Report error, log error {e}");
         }
 
         // Send Hello to the client.
         if let Err(e) = client_stream
             .send(NetworkEvent::ServerHello(ServerHello {
                 your_id: user_id,
-                default_channel_id: server_state.default_channel_id,
+                default_channel_id: server_state.default_channel_id(),
             }))
             .await
         {
@@ -150,42 +131,16 @@ impl Connection {
         }
 
         // Subscribe to all the server's channels
-        let channels: StreamMap<_, _> = server_state
-            .channels
-            .iter()
-            .map(|pair| {
-                let key = *pair.key();
-                let stream = BroadcastStream::from(pair.value().broadcast.subscribe());
-                (key, stream)
-            })
+        let channels: select_all::SelectAll<_> = server_state
+            .subscribe_to_channels()
+            .into_iter()
+            .map(BroadcastStream::from)
             .collect();
-
-        let (event_tx, event_rx) = mpsc::channel(128); // TODO: Buffer size
-
-        let user_info = UserInfo {
-            id: user_id,
-            name: hello.requested_name,
-        };
-
-        let user = User {
-            info: user_info.clone(),
-            sender: event_tx,
-        };
-
-        // Register this connection in the ServerState
-        server_state.users.insert(user_id, user);
-
-        // Notify all other users that you've joined. The only failure condition for sending through
-        // a broadcast channel is if there are no receivers, but we don't actually care if nobody
-        // gets this message. As such, we ignore this error.
-        let _: Result<_, _> = server_state
-            .global_broadcast
-            .send(NetworkEvent::UserJoined(user_info));
 
         // Subscribe to the global broadcast channel. We do this AFTER sending the join notification
         // because the client doesn't need to be reminded that they connected (they already know
         // that).
-        let global_broadcast_rx = server_state.global_broadcast.subscribe();
+        let global_broadcast_rx = server_state.subscribe_to_global();
 
         let connection = Self {
             user_id,
@@ -236,7 +191,7 @@ impl Connection {
 
                 // Channel messages.
                 // TODO: Do I need the channel ID at all, or can I remove it to save space?
-                Some((channel_id, result)) = self.channels.next() => {
+                Some(result) = self.channels.next() => {
                     match result {
                         Ok(msg) => self.send_event_to_client(msg).await,
                         Err(e) => todo!("Log error, report to sender {e}"),
@@ -265,24 +220,14 @@ impl Connection {
 
             NetworkCommand::FetchChannels(_fetch) => {
                 self.send_event_to_client(NetworkEvent::ChannelSync(ChannelSync {
-                    channels: self
-                        .server_state
-                        .channels
-                        .iter()
-                        .map(|entry| entry.info.clone())
-                        .collect(),
+                    channels: self.server_state.get_all_channel_info(),
                 }))
                 .await;
             }
 
             NetworkCommand::FetchUsers(_fetch) => {
                 self.send_event_to_client(NetworkEvent::UserSync(UserSync {
-                    users: self
-                        .server_state
-                        .users
-                        .iter()
-                        .map(|entry| entry.info.clone())
-                        .collect(),
+                    users: self.server_state.get_all_user_info(),
                 }))
                 .await;
             }
@@ -295,7 +240,7 @@ impl Connection {
 
     async fn send_event_to_client(&mut self, event: NetworkEvent) {
         if let Err(e) = self.client_stream.send(event).await {
-            todo!("Log error, report to sender");
+            todo!("Log error, report to sender {e}");
         }
     }
 
@@ -308,38 +253,23 @@ impl Connection {
 
         match destination {
             SendDestination::Channel(channel_id) => {
-                let Some(channel) = self.server_state.channels.get(&channel_id) else {
-                    todo!("Log error, report to sender");
-                };
-
                 let event = NetworkEvent::ReceivedMessage(ReceivedMessage {
                     contents,
                     sender_id: self.user_id,
                     destination: ReceiveDestination::Channel(channel_id),
                 });
 
-                // Sending returns an error if there are no subscribed listeners (we don't care
-                // about that), or if the channel is closed. The channel can never close, because
-                // the Sender side (which is responsible for dropping) is held in the state struct,
-                // which is held by tasks that last for the full duration of the program. So we just
-                // ignore this error.
-                let _: Result<_, _> = channel.broadcast.send(event);
+                self.server_state.send_event_to_channel(channel_id, event);
             }
 
             SendDestination::User(target_user_id) => {
-                let Some(user) = self.server_state.users.get(&target_user_id) else {
-                    todo!("Log error, report to sender");
-                };
-
                 let event = NetworkEvent::ReceivedMessage(ReceivedMessage {
                     contents,
                     sender_id: self.user_id,
                     destination: ReceiveDestination::User(target_user_id),
                 });
 
-                if let Err(e) = user.sender.send(event.clone()).await {
-                    todo!("Log error, report to sender {e}");
-                }
+                self.server_state.send_event_to_user(target_user_id, event.clone()).await;
 
                 // Can't use send_event_to_client here due to a borrow checker conflict.
                 // We send back to the sender as well to include them in the loopback, such that
@@ -356,25 +286,9 @@ impl Connection {
     }
 
     fn update_info(&mut self, new_info: UpdateInfo) {
-        let Some(mut user_entry) = self.server_state.users.get_mut(&self.user_id) else {
-            todo!("Log error: unexplainable state mismatch? Probably unrecoverable?");
-        };
-
-        if let Some(new_name) = new_info.name {
-            if !self.server_state.taken_names.insert(new_name.clone()) {
-                todo!("Report taken username to client");
-            }
-
-            user_entry.info.name = new_name;
+        // TODO: Make length configurable
+        if let Err(e) = self.server_state.update_user_info(self.user_id, new_info, 20) {
+            todo!("Log and report error: {e}");
         }
-
-        // The user's input was updated in-place, so it's now fully updated. We clone it out to send
-        // back to the client for the update event.
-        let event = NetworkEvent::UserInfoUpdated(user_entry.info.clone());
-
-        // The only failure condition for sending through a broadcast channel is if there are no
-        // receivers, but we don't actually care if nobody gets this message. As such, we ignore
-        // this error.
-        let _: Result<_, _> = self.server_state.global_broadcast.send(event);
     }
 }

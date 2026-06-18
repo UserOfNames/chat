@@ -65,7 +65,7 @@ impl Listener {
                         ));
                     }
 
-                    Err(e) => todo!("Log error"),
+                    Err(e) => todo!("Log listener accept error {e}"),
                 },
 
                 () = self.cancellation_token.cancelled() => break,
