@@ -10,7 +10,6 @@ dashmap = { workspace = true }
 figment = { workspace = true }
 futures = { workspace = true }
 directories = { workspace = true }
-rand = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
