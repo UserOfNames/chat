@@ -14,7 +14,7 @@ use figment::{
     Figment,
     providers::{Env, Format, Serialized, Toml},
 };
-use network_protocol::{ChannelInfo, NetworkEvent, UserId, UserInfo};
+use network_protocol::{ChannelInfo, NetworkEvent, UserInfo};
 use rustls::{
     ServerConfig,
     pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},

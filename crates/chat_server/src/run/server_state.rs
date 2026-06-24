@@ -49,6 +49,21 @@ pub enum ChannelError {
     AlreadyExists(ChannelId),
 }
 
+/// Unique token representing a specific user. This wraps the user's `UserId`, but can't be forged
+/// by another user.
+///
+/// It is used to enforce the invariant that a `Connection` is only allowed to modify the `UserInfo`
+/// of its associated user. This prevents race conditions in some methods.
+#[derive(Debug)]
+#[repr(transparent)]
+pub struct UserToken(UserId);
+
+impl UserToken {
+    pub fn id(&self) -> UserId {
+        self.0
+    }
+}
+
 /// State shared between all tasks.
 #[derive(Debug)]
 pub struct ServerState {
@@ -206,11 +221,10 @@ impl ServerState {
     /// Returns a [`NameRegistrationError`] if name registration fails.
     pub fn handle_new_user(
         &self,
-        id: UserId,
         name: String,
         max_username_length: usize,
         event_tx: mpsc::Sender<NetworkEvent>,
-    ) -> Result<(), UserError> {
+    ) -> Result<UserToken, UserError> {
         let name = name.trim();
 
         Self::validate_username(name, max_username_length)?;
@@ -222,8 +236,10 @@ impl ServerState {
             )));
         }
 
+        let user_id = UserId(uuid::Uuid::now_v7());
+
         let user_info = UserInfo {
-            id,
+            id: user_id,
             name: name.to_owned(),
         };
 
@@ -232,11 +248,11 @@ impl ServerState {
             sender: event_tx,
         };
 
-        self.users.insert(id, user);
+        self.users.insert(user_id, user);
 
         self.send_global_event(NetworkEvent::UserJoined(user_info));
 
-        Ok(())
+        Ok(UserToken(user_id))
     }
 
     /// Update a user's information with the given [`UpdateInfo`]. `Some` fields will be updated,
@@ -244,7 +260,7 @@ impl ServerState {
     /// (for example, if a username is invalid), the entire update will fail.
     pub fn update_user_info(
         &self,
-        id: UserId,
+        token: &UserToken,
         new_info: UpdateInfo,
         max_username_length: usize,
     ) -> Result<(), UserError> {
@@ -282,9 +298,10 @@ impl ServerState {
             committed: false,
         };
 
-        let Some(mut proposed_user_info) = self.users.get(&id).map(|inner| inner.info.clone())
+        let Some(mut proposed_user_info) =
+            self.users.get(&token.id()).map(|inner| inner.info.clone())
         else {
-            return Err(UserError::DoesNotExist(id));
+            return Err(UserError::DoesNotExist(token.id()));
         };
 
         if let Some(new_name) = new_info.name {
@@ -317,20 +334,20 @@ impl ServerState {
             new_name.clone_into(&mut proposed_user_info.name);
         }
 
-        if let Some(mut user_entry) = self.users.get_mut(&id) {
+        if let Some(mut user_entry) = self.users.get_mut(&token.id()) {
             user_entry.info = proposed_user_info.clone();
             drop_guard.committed = true;
             self.send_global_event(NetworkEvent::UserInfoUpdated(proposed_user_info));
             Ok(())
         } else {
-            Err(UserError::DoesNotExist(id))
+            Err(UserError::DoesNotExist(token.id()))
         }
     }
 
     /// Remove a user with the given ID from the server, if the ID is present.
-    pub fn remove_user(&self, target_id: UserId) -> Result<(), UserError> {
-        let Some((_, user)) = self.users.remove(&target_id) else {
-            return Err(UserError::DoesNotExist(target_id));
+    pub fn remove_user(&self, token: UserToken) -> Result<(), UserError> {
+        let Some((_, user)) = self.users.remove(&token.id()) else {
+            return Err(UserError::DoesNotExist(token.id()));
         };
 
         let normalized_name = Self::normalize_username(&user.info.name);

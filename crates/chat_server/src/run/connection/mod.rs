@@ -1,9 +1,12 @@
+mod guard;
+
 use std::sync::Arc;
 
 use futures::{
     SinkExt, StreamExt,
     stream::{SelectAll, select_all},
 };
+use guard::ConnectionGuard;
 use network_protocol::{
     ChannelSync, NetworkCommand, NetworkEvent, ReceiveDestination, ReceivedMessage,
     SendDestination, SendMessage, ServerHello, UpdateInfo, UserSync, codecs::ServerCodec,
@@ -16,34 +19,12 @@ use tokio::{
 use tokio_rustls::{TlsAcceptor, server::TlsStream};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_util::{codec::Framed, sync::CancellationToken};
-use uuid::Uuid;
 
-use crate::run::{ServerState, UserId, server_state::UserError};
-
-/// RAII guard that automatically unregisters a user when dropped.
-#[derive(Debug)]
-struct ConnectionGuard {
-    user_id: UserId,
-    server_state: Arc<ServerState>,
-}
-
-impl Drop for ConnectionGuard {
-    fn drop(&mut self) {
-        match self.server_state.remove_user(self.user_id) {
-            Err(UserError::DoesNotExist(_)) => {}
-            _ => self
-                .server_state
-                .send_global_event(NetworkEvent::UserLeft(self.user_id)),
-        }
-    }
-}
+use crate::run::ServerState;
 
 /// A connection task responsible for talking to one client.
 #[derive(Debug)]
 pub struct Connection {
-    /// ID of the user associated with this connection
-    user_id: UserId,
-
     /// Shared server state.
     server_state: Arc<ServerState>,
 
@@ -64,7 +45,7 @@ pub struct Connection {
     cancellation_token: CancellationToken,
 
     /// RAII guard to ensure the `Connection` unregisters from the `server_state` when it drops.
-    _guard: ConnectionGuard,
+    guard: ConnectionGuard,
 }
 
 impl Connection {
@@ -82,16 +63,6 @@ impl Connection {
         client_stream: TcpStream,
         cancellation_token: CancellationToken,
     ) {
-        let user_id = UserId(Uuid::now_v7());
-
-        // It's important that we create the guard before anything else, or else there may be a gap
-        // that allows ghost state to accumulate.
-        #[allow(clippy::used_underscore_binding)]
-        let _guard = ConnectionGuard {
-            user_id,
-            server_state: server_state.clone(),
-        };
-
         let client_stream = match tls_acceptor.accept(client_stream).await {
             Ok(stream) => stream,
             Err(e) => {
@@ -115,14 +86,20 @@ impl Connection {
         let (event_tx, event_rx) = mpsc::channel::<NetworkEvent>(128); // TODO: Buffer size
 
         // TODO: Make max length configurable
-        if let Err(e) = server_state.handle_new_user(user_id, hello.requested_name, 20, event_tx) {
-            todo!("Report error, log error {e}");
-        }
+        let user_token = match server_state.handle_new_user(hello.requested_name, 20, event_tx) {
+            Ok(token) => token,
+            Err(e) => todo!("Report error, log error {e}"),
+        };
+
+        // It's important that we create the guard before any more fallible operations, since
+        // `handle_new_user` touched persistent state.
+        #[allow(clippy::used_underscore_binding)]
+        let guard = ConnectionGuard::new(user_token, server_state.clone());
 
         // Send Hello to the client.
         if let Err(e) = client_stream
             .send(NetworkEvent::ServerHello(ServerHello {
-                your_id: user_id,
+                your_id: guard.id(),
                 default_channel_id: server_state.default_channel_id(),
             }))
             .await
@@ -143,14 +120,13 @@ impl Connection {
         let global_broadcast_rx = server_state.subscribe_to_global();
 
         let connection = Self {
-            user_id,
             server_state,
             client_stream,
             global_event_rx: global_broadcast_rx,
             event_rx,
             channels,
             cancellation_token,
-            _guard,
+            guard,
         };
 
         connection.run().await;
@@ -255,7 +231,7 @@ impl Connection {
             SendDestination::Channel(channel_id) => {
                 let event = NetworkEvent::ReceivedMessage(ReceivedMessage {
                     contents,
-                    sender_id: self.user_id,
+                    sender_id: self.guard.id(),
                     destination: ReceiveDestination::Channel(channel_id),
                 });
 
@@ -265,18 +241,20 @@ impl Connection {
             SendDestination::User(target_user_id) => {
                 let event = NetworkEvent::ReceivedMessage(ReceivedMessage {
                     contents,
-                    sender_id: self.user_id,
+                    sender_id: self.guard.id(),
                     destination: ReceiveDestination::User(target_user_id),
                 });
 
-                self.server_state.send_event_to_user(target_user_id, event.clone()).await;
+                self.server_state
+                    .send_event_to_user(target_user_id, event.clone())
+                    .await;
 
                 // Can't use send_event_to_client here due to a borrow checker conflict.
                 // We send back to the sender as well to include them in the loopback, such that
                 // they can render their own message in the correct order relative to other messages.
                 // However, if the sender is sending to themselves (a "note to self"), this would
                 // result in a double send. As such, we filter that case out.
-                if target_user_id != self.user_id
+                if target_user_id != self.guard.id()
                     && let Err(e) = self.client_stream.send(event).await
                 {
                     todo!("Log error: sender disconnected while sending DM {e}");
@@ -287,7 +265,10 @@ impl Connection {
 
     fn update_info(&mut self, new_info: UpdateInfo) {
         // TODO: Make length configurable
-        if let Err(e) = self.server_state.update_user_info(self.user_id, new_info, 20) {
+        if let Err(e) = self
+            .server_state
+            .update_user_info(self.guard.token(), new_info, 20)
+        {
             todo!("Log and report error: {e}");
         }
     }
