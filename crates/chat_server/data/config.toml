@@ -10,6 +10,9 @@ listener_port = 12345
 # Path to the TLS private key file associated with the certificate
 # tls_key_path = ""
 
+# Maximum allowed length of users' display names
+max_username_length = 20
+
 # List of all the channels on the server.
 #
 # The IDs are integer keys. IDs uniquely identify the channel's history and

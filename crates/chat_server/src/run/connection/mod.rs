@@ -85,8 +85,11 @@ impl Connection {
 
         let (event_tx, event_rx) = mpsc::channel::<NetworkEvent>(128); // TODO: Buffer size
 
-        // TODO: Make max length configurable
-        let user_token = match server_state.handle_new_user(hello.requested_name, 20, event_tx) {
+        let user_token = match server_state.handle_new_user(
+            hello.requested_name,
+            server_state.max_username_length(),
+            event_tx,
+        ) {
             Ok(token) => token,
             Err(e) => todo!("Report error, log error {e}"),
         };
@@ -264,11 +267,11 @@ impl Connection {
     }
 
     fn update_info(&mut self, new_info: UpdateInfo) {
-        // TODO: Make length configurable
-        if let Err(e) = self
-            .server_state
-            .update_user_info(self.guard.token(), new_info, 20)
-        {
+        if let Err(e) = self.server_state.update_user_info(
+            self.guard.token(),
+            new_info,
+            self.server_state.max_username_length(),
+        ) {
             todo!("Log and report error: {e}");
         }
     }

@@ -70,6 +70,9 @@ pub struct ServerState {
     /// The default channel's ID.
     default_channel_id: Option<ChannelId>,
 
+    /// Maximum allowed length of users' display names.
+    max_username_length: usize,
+
     /// Broadcast sender to send an event to all connected clients.
     global_broadcast: broadcast::Sender<NetworkEvent>,
 
@@ -86,9 +89,10 @@ pub struct ServerState {
 
 impl ServerState {
     /// Initialize a `ServerState` instance.
-    pub fn new(default_channel_id: Option<ChannelId>) -> Self {
+    pub fn new(default_channel_id: Option<ChannelId>, max_username_length: usize) -> Self {
         Self {
             default_channel_id,
+            max_username_length,
             global_broadcast: broadcast::channel(128).0, // TODO: Buffer size
             channels: DashMap::new(),
             users: DashMap::new(),
@@ -99,6 +103,11 @@ impl ServerState {
     /// Get the default channel ID, if there is one.
     pub fn default_channel_id(&self) -> Option<ChannelId> {
         self.default_channel_id
+    }
+
+    /// Get the maximum allowed username length.
+    pub fn max_username_length(&self) -> usize {
+        self.max_username_length
     }
 
     /// Send an event to all active users.

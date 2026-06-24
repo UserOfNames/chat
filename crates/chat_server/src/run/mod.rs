@@ -55,6 +55,11 @@ pub struct RunArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     tls_key_path: Option<PathBuf>,
+
+    /// Maximum allowed length of users' display names
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    max_username_length: Option<usize>,
 }
 
 /// Configuration for the server runtime.
@@ -71,6 +76,9 @@ struct Config {
 
     /// Path to the TLS private key file associated with the certificate.
     tls_key_path: TildeRelativePathBuf,
+
+    /// Maximum allowed length of users' display names.
+    max_username_length: usize,
 
     /// List of all the channels on the server. Includes channels' IDs and names.
     channels: Vec<ChannelInfo>,
@@ -128,7 +136,10 @@ impl ChatServer {
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_config));
 
         let default_channel_id = config.channels.first().map(|inner| inner.id);
-        let server_state = Arc::new(ServerState::new(default_channel_id));
+        let server_state = Arc::new(ServerState::new(
+            default_channel_id,
+            config.max_username_length,
+        ));
 
         for channel_info in config.channels {
             let (tx, _rx) = broadcast::channel(128); // TODO: Buffer size
