@@ -158,8 +158,7 @@ impl ChatServer {
             self.bind_address,
         );
 
-        self.task_tracker
-            .spawn(async move { listener.start().await });
+        self.task_tracker.spawn(listener.start());
 
         tokio::signal::ctrl_c()
             .await
