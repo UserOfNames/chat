@@ -11,7 +11,7 @@ pub mod network_protocol {
 use std::fs::{create_dir_all, write};
 use std::io;
 use std::ops::ControlFlow;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use figment::{
@@ -44,6 +44,10 @@ const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");
 
 #[derive(Debug, Error)]
 pub enum InitError {
+    /// The config path was overridden, but the target path does not exist.
+    #[error("Overridden config path does not exist: '{0}'")]
+    OverridePathDoesNotExist(PathBuf),
+
     // This variant is massive, so we have to box it or the linter will complain
     /// Extracting the [`figment::Figment`] into a [`Config`] failed.
     #[error("Config resolution failed: {0}")]
@@ -132,33 +136,29 @@ impl ChatBackend {
     /// # Errors
     /// See [`InitError`] for all possible errors from this function.
     pub fn new(config_path_override: Option<PathBuf>) -> Result<(Self, BackendHandle), InitError> {
-        let default_paths = DefaultPaths::defaults("client");
-
-        let config_path = first_match! {
-            Some(overr) = config_path_override => overr,
-            Some(defaults) = default_paths => defaults.config,
-        };
-
         let mut figment = Figment::new().merge(Toml::string(DEFAULT_CONFIG));
 
-        if let Some(path) = config_path {
-            if path.exists() {
-                figment = figment.merge(Toml::file(&path));
-            } else {
-                // Writing the default config file is best-effort. No error paths here return or
-                // diverge.
-                #[expect(clippy::collapsible_if)]
-                if let Some(parent) = path.parent() {
-                    if let Err(e) = create_dir_all(parent) {
-                        // TODO: Log error
-                    }
+        let default_paths = DefaultPaths::defaults("client");
+
+        first_match! {
+            Some(override_path) = config_path_override => {
+                if !override_path.exists() {
+                    return Err(InitError::OverridePathDoesNotExist(override_path));
                 }
 
-                if let Err(e) = write(path, DEFAULT_CONFIG) {
-                    // TODO: Log error
+                figment = figment.merge(Toml::file(&override_path));
+            },
+
+            Some(defaults) = default_paths => {
+                let default_path = defaults.config;
+
+                if default_path.exists() {
+                    figment = figment.merge(Toml::file(&default_path));
+                } else {
+                    Self::try_to_write_config_file(&default_path);
                 }
-            }
-        }
+            },
+        };
 
         let config: Config = figment.extract()?;
 
@@ -198,6 +198,21 @@ impl ChatBackend {
         };
 
         Ok((backend, handle))
+    }
+
+    /// Attempt to write the default config file. This is best-effort; if an error occurs, we log
+    /// and swallow it.
+    fn try_to_write_config_file(path: &Path) {
+        #[expect(clippy::collapsible_if)]
+        if let Some(parent) = path.parent() {
+            if let Err(e) = create_dir_all(parent) {
+                // TODO: Log error
+            }
+        }
+
+        if let Err(e) = write(path, DEFAULT_CONFIG) {
+            // TODO: Log error
+        }
     }
 
     /// Start the backend.
