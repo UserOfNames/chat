@@ -45,6 +45,7 @@ pub struct NamedProjectDirs {
     component: PathBuf,
     config_dir: PathBuf,
     data_dir: PathBuf,
+    state_dir: PathBuf,
 }
 
 impl NamedProjectDirs {
@@ -53,15 +54,24 @@ impl NamedProjectDirs {
     /// `component` will be appended to all output paths from the underlying `ProjectDirs`.
     pub fn new(component: impl Into<PathBuf>) -> Option<Self> {
         let base = ProjectDirs::from("rs", "UserOfNames", "my_chat")?;
+
         let component = component.into();
+
         let config_dir = base.config_dir().join(&component);
+
         let data_dir = base.data_dir().join(&component);
+
+        let state_dir = base
+            .state_dir()
+            .unwrap_or_else(|| base.data_local_dir())
+            .join(&component);
 
         Some(Self {
             base,
             component,
             config_dir,
             data_dir,
+            state_dir,
         })
     }
 
@@ -83,6 +93,11 @@ impl NamedProjectDirs {
     #[must_use]
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
+    }
+
+    #[must_use]
+    pub fn state_dir(&self) -> &Path {
+        &self.state_dir
     }
 }
 

@@ -39,6 +39,7 @@ struct DefaultPaths {
     ca_key: PathBuf,
     server_cert: PathBuf,
     server_key: PathBuf,
+    log_file: PathBuf,
 }
 
 impl DefaultPaths {
@@ -49,19 +50,21 @@ impl DefaultPaths {
     /// `ca_key`: `NamedProjectDirs::data_dir()/tls/ca/key.pem`
     /// `server_cert`: `NamedProjectDirs::data_dir()/tls/server/certificate.pem`
     /// `server_key`: `NamedProjectDirs::data_dir()/tls/server/key.pem`
+    /// `log_file`: `NamedProjectDirs::state_dir()/server.log`
     fn defaults(component: impl Into<PathBuf>) -> Option<Self> {
         let base = NamedProjectDirs::new(component)?;
 
         let config = base.config_dir().join("config.toml");
 
         let ca_dir = base.data_dir().join("tls").join("ca");
-        let server_cert_dir = base.data_dir().join("tls").join("server");
-
         let ca_cert = ca_dir.join("certificate.pem");
         let ca_key = ca_dir.join("key.pem");
 
+        let server_cert_dir = base.data_dir().join("tls").join("server");
         let server_cert = server_cert_dir.join("certificate.pem");
         let server_key = server_cert_dir.join("key.pem");
+
+        let log_file = base.state_dir().join("server.log");
 
         Some(Self {
             config,
@@ -69,6 +72,7 @@ impl DefaultPaths {
             ca_key,
             server_cert,
             server_key,
+            log_file,
         })
     }
 }
