@@ -22,6 +22,8 @@ use tokio_util::{codec::Framed, sync::CancellationToken};
 
 use crate::run::ServerState;
 
+type ClientStream = Framed<TlsStream<TcpStream>, ServerCodec>;
+
 /// A connection task responsible for talking to one client.
 #[derive(Debug)]
 pub struct Connection {
@@ -76,6 +78,42 @@ impl Connection {
         // NOTE: For now, if the handshake fails for any reason, we just abort the connection
         // entirely. This keeps the implementation far simpler, at the cost of potentially repeating
         // the TLS handshake. If this becomes a problem later, we'll fix it later.
+        let (event_rx, guard) =
+            match Self::handshake_client(&mut client_stream, server_state.clone()).await {
+                Ok(output) => output,
+                Err(e) => todo!("Log error {e} and return"),
+            };
+
+        // Subscribe to all the server's channels
+        let channels: select_all::SelectAll<_> = server_state
+            .subscribe_to_channels()
+            .into_iter()
+            .map(BroadcastStream::from)
+            .collect();
+
+        // Subscribe to the global broadcast channel. We do this AFTER sending the join notification
+        // because the client doesn't need to be reminded that they connected (they already know
+        // that).
+        let global_broadcast_rx = server_state.subscribe_to_global();
+
+        let connection = Self {
+            server_state,
+            client_stream,
+            global_event_rx: global_broadcast_rx,
+            event_rx,
+            channels,
+            cancellation_token,
+            guard,
+        };
+
+        connection.run().await;
+    }
+
+    /// Perform the application-level handshake.
+    async fn handshake_client(
+        client_stream: &mut ClientStream,
+        server_state: Arc<ServerState>,
+    ) -> anyhow::Result<(mpsc::Receiver<NetworkEvent>, ConnectionGuard)> {
         let hello = match client_stream.next().await {
             Some(Ok(NetworkCommand::ClientHello(hello))) => hello,
             Some(Ok(other)) => todo!("Log error: bad handshake: unexpected command {other:?}"),
@@ -110,29 +148,7 @@ impl Connection {
             todo!("Log error: error sending ServerHello: {e}");
         }
 
-        // Subscribe to all the server's channels
-        let channels: select_all::SelectAll<_> = server_state
-            .subscribe_to_channels()
-            .into_iter()
-            .map(BroadcastStream::from)
-            .collect();
-
-        // Subscribe to the global broadcast channel. We do this AFTER sending the join notification
-        // because the client doesn't need to be reminded that they connected (they already know
-        // that).
-        let global_broadcast_rx = server_state.subscribe_to_global();
-
-        let connection = Self {
-            server_state,
-            client_stream,
-            global_event_rx: global_broadcast_rx,
-            event_rx,
-            channels,
-            cancellation_token,
-            guard,
-        };
-
-        connection.run().await;
+        Ok((event_rx, guard))
     }
 
     /// Internal helper to actually run the connection task. Why make `Connection` a struct at all,
