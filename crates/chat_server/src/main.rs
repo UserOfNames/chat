@@ -39,7 +39,7 @@ struct DefaultPaths {
     ca_key: PathBuf,
     server_cert: PathBuf,
     server_key: PathBuf,
-    log_file: PathBuf,
+    log_dir: PathBuf,
 }
 
 impl DefaultPaths {
@@ -64,7 +64,7 @@ impl DefaultPaths {
         let server_cert = server_cert_dir.join("certificate.pem");
         let server_key = server_cert_dir.join("key.pem");
 
-        let log_file = base.state_dir().join("server.log");
+        let log_dir = base.state_dir().to_owned();
 
         Some(Self {
             config,
@@ -72,7 +72,7 @@ impl DefaultPaths {
             ca_key,
             server_cert,
             server_key,
-            log_file,
+            log_dir,
         })
     }
 }

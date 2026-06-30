@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use network_protocol::{NetworkEvent, UserId};
+use tracing::warn;
 
 use crate::run::server_state::{ServerState, UserError, UserToken};
 
@@ -41,7 +42,7 @@ impl Drop for ConnectionGuard {
 
         match self.server_state.remove_user(token) {
             Err(UserError::YourIdNotFound) => {
-                todo!("Log error");
+                warn!(%id, "State mismatch detected while disconnecting: ID not found");
             }
 
             _ => self

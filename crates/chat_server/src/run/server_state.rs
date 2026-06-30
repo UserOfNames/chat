@@ -350,7 +350,7 @@ impl ServerState {
             let new_name = new_name.trim();
 
             if let Err(e) = Self::validate_username(new_name, max_username_length) {
-                todo!("Log and report validation error {e}, return");
+                return Err(e.into());
             }
 
             let normalized_new_name = Self::normalize_username(new_name);

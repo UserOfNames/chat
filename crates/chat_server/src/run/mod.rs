@@ -8,7 +8,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 use clap::Args;
 use figment::{
     Figment,
@@ -27,6 +27,9 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 use listener::Listener;
 use server_state::ServerState;
+use tracing::{debug, info, instrument};
+use tracing_appender::{non_blocking::WorkerGuard, rolling};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{DEFAULT_CONFIG, DefaultPaths, ENV_VAR_PREFIX};
 
@@ -60,6 +63,21 @@ pub struct RunArgs {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     max_username_length: Option<usize>,
+
+    /// Whether to write logs to standard output.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    log_to_stdout: Option<bool>,
+
+    /// Whether to write logs to a file.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    log_to_file: Option<bool>,
+
+    /// Directory to store the log file if `log_to_file` is true.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[arg(long)]
+    log_dir: Option<PathBuf>,
 }
 
 /// Configuration for the server runtime.
@@ -79,6 +97,15 @@ struct Config {
 
     /// Maximum allowed length of users' display names.
     max_username_length: usize,
+
+    /// Whether to write logs to standard output.
+    log_to_stdout: bool,
+
+    /// Whether to write logs to a file.
+    log_to_file: bool,
+
+    /// Directory to store the log file if `log_to_file` is true.
+    log_dir: PathBuf,
 
     /// List of all the channels on the server. Includes channels' IDs and names.
     channels: Vec<ChannelInfo>,
@@ -107,8 +134,10 @@ struct ChatServer {
 }
 
 impl ChatServer {
+    #[instrument(skip_all, err)]
     fn new(config: Config) -> anyhow::Result<Self> {
         let bind_address = SocketAddr::new(config.listener_ip, config.listener_port);
+        debug!(ip = %config.listener_ip, port = %config.listener_port, "Resolved bind address");
 
         let cert_path_err_display = config.tls_cert_path.original().display();
         let tls_cert_path = &config
@@ -128,6 +157,12 @@ impl ChatServer {
         let key = PrivateKeyDer::from_pem_file(tls_key_path)
             .with_context(|| format!("Reading TLS key file '{key_path_err_display}'"))?;
 
+        debug!(
+            cert_path = %tls_cert_path.display(),
+            key_path = %tls_key_path.display(),
+            "Loaded TLS keypair"
+        );
+
         let tls_config = ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(certs, key)
@@ -144,11 +179,18 @@ impl ChatServer {
         for channel_info in config.channels {
             let (tx, _rx) = broadcast::channel(128); // TODO: Buffer size
 
+            debug!(
+                channel_id = %channel_info.id,
+                channel_name = %channel_info.name,
+                "Registering channel"
+            );
+
             if let Err(e) = server_state.add_channel(channel_info.id, channel_info.name, tx) {
-                todo!("Log error and return: {e}");
+                bail!("Failed to initialize channels - {e}");
             }
         }
 
+        info!("Initialized server state");
         Ok(Self {
             bind_address,
             tls_acceptor,
@@ -157,8 +199,8 @@ impl ChatServer {
         })
     }
 
-    #[allow(unused_mut)]
-    async fn run(mut self) -> anyhow::Result<()> {
+    #[instrument(skip_all, err)]
+    async fn run(self) -> anyhow::Result<()> {
         let cancellation_token = CancellationToken::new();
 
         let listener = Listener::new(
@@ -175,11 +217,15 @@ impl ChatServer {
             .await
             .context("Failed to listen for 'Ctrl-C' signal")?;
 
+        info!("Interruption signal received, shutting down...");
         cancellation_token.cancel();
 
         self.task_tracker.close();
+
+        debug!("Waiting for tasks to finish...");
         self.task_tracker.wait().await;
 
+        info!("Server shut down gracefully");
         Ok(())
     }
 }
@@ -197,13 +243,14 @@ pub async fn main(default_paths: Option<DefaultPaths>, args: RunArgs) -> anyhow:
 
     let mut figment = Figment::new().merge(Toml::string(DEFAULT_CONFIG));
 
-    if let Some(path) = config_path {
+    if let Some(path) = &config_path {
         figment = figment.merge(Toml::file(path));
     }
 
     if let Some(defaults) = &default_paths {
         figment = figment.merge(Serialized::default("tls_cert_path", &defaults.server_cert));
         figment = figment.merge(Serialized::default("tls_key_path", &defaults.server_key));
+        figment = figment.merge(Serialized::default("log_dir", &defaults.log_dir));
     }
 
     let config: Config = figment
@@ -212,8 +259,41 @@ pub async fn main(default_paths: Option<DefaultPaths>, args: RunArgs) -> anyhow:
         .extract()
         .context("Resolving configuration")?;
 
+    let _log_file_guard = init_logging(&config);
+
+    debug!(config_path = ?config_path, "Configuration resolved");
+
+    info!("Starting server");
+    if config.log_to_file {
+        info!(log_dir = %config.log_dir.display(), "Background file logging enabled");
+    }
+
     ChatServer::new(config)
         .context("Initializing server")?
         .run()
         .await
+}
+
+fn init_logging(config: &Config) -> Option<WorkerGuard> {
+    let stdout_layer = config.log_to_stdout.then(tracing_subscriber::fmt::layer);
+
+    let (file_layer, file_guard) = if config.log_to_file {
+        let appender = rolling::daily(&config.log_dir, "server.log");
+        let (appender, guard) = tracing_appender::non_blocking(appender);
+
+        let layer = tracing_subscriber::fmt::layer()
+            .with_writer(appender)
+            .with_ansi(false);
+
+        (Some(layer), Some(guard))
+    } else {
+        (None, None)
+    };
+
+    tracing_subscriber::registry()
+        .with(stdout_layer)
+        .with(file_layer)
+        .init();
+
+    file_guard
 }

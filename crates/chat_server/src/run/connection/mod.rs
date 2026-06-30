@@ -1,7 +1,8 @@
 mod guard;
 
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
+use anyhow::bail;
 use futures::{
     SinkExt, StreamExt,
     stream::{SelectAll, select_all},
@@ -17,8 +18,9 @@ use tokio::{
     sync::{broadcast, mpsc},
 };
 use tokio_rustls::{TlsAcceptor, server::TlsStream};
-use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::{BroadcastStream, errors::BroadcastStreamRecvError};
 use tokio_util::{codec::Framed, sync::CancellationToken};
+use tracing::{Level, debug, info, instrument, warn};
 
 use crate::run::ServerState;
 
@@ -31,7 +33,10 @@ pub struct Connection {
     server_state: Arc<ServerState>,
 
     /// Stream of commands coming from the client, or sending back to the client.
-    client_stream: Framed<TlsStream<TcpStream>, ServerCodec>,
+    client_stream: ClientStream,
+
+    /// Address of the client associated with this connection.
+    client_addr: SocketAddr,
 
     /// Channel for events broadcast to all users on the server.
     global_event_rx: broadcast::Receiver<NetworkEvent>,
@@ -59,20 +64,25 @@ impl Connection {
     /// initializing and running the `Connection` task. This is because the typical `new()` ->
     /// `run()` pattern involves the parent `Listener` in the handshake resolution, which both slows
     /// it down and potentially allows DDOS attacks.
+    #[instrument(skip_all, parent = None, fields(%client_addr))]
     pub async fn start(
         server_state: Arc<ServerState>,
         tls_acceptor: TlsAcceptor,
         client_stream: TcpStream,
+        client_addr: SocketAddr,
         cancellation_token: CancellationToken,
     ) {
+        debug!("New client connection starting");
+
         let client_stream = match tls_acceptor.accept(client_stream).await {
             Ok(stream) => stream,
             Err(e) => {
-                // TODO: log error
+                warn!(error = %e, "TLS handshake failed");
                 return;
             }
         };
         let mut client_stream = Framed::new(client_stream, ServerCodec);
+        debug!("Client completed TLS handshake");
 
         // We want to finish the ClientHello -> ServerHello handshake before anything else.
         // NOTE: For now, if the handshake fails for any reason, we just abort the connection
@@ -81,8 +91,12 @@ impl Connection {
         let (event_rx, guard) =
             match Self::handshake_client(&mut client_stream, server_state.clone()).await {
                 Ok(output) => output,
-                Err(e) => todo!("Log error {e} and return"),
+                Err(e) => {
+                    warn!(error = %e, "Client handshake failed");
+                    return;
+                }
             };
+        debug!("Client completed application-level handshake");
 
         // Subscribe to all the server's channels
         let channels: select_all::SelectAll<_> = server_state
@@ -94,12 +108,13 @@ impl Connection {
         // Subscribe to the global broadcast channel. We do this AFTER sending the join notification
         // because the client doesn't need to be reminded that they connected (they already know
         // that).
-        let global_broadcast_rx = server_state.subscribe_to_global();
+        let global_event_rx = server_state.subscribe_to_global();
 
         let connection = Self {
             server_state,
             client_stream,
-            global_event_rx: global_broadcast_rx,
+            client_addr,
+            global_event_rx,
             event_rx,
             channels,
             cancellation_token,
@@ -110,16 +125,18 @@ impl Connection {
     }
 
     /// Perform the application-level handshake.
+    #[instrument(skip_all, err(level = Level::WARN))]
     async fn handshake_client(
         client_stream: &mut ClientStream,
         server_state: Arc<ServerState>,
     ) -> anyhow::Result<(mpsc::Receiver<NetworkEvent>, ConnectionGuard)> {
         let hello = match client_stream.next().await {
             Some(Ok(NetworkCommand::ClientHello(hello))) => hello,
-            Some(Ok(other)) => todo!("Log error: bad handshake: unexpected command {other:?}"),
-            Some(Err(e)) => todo!("Log error: bad handshake: error {e}"),
-            None => todo!("Log error: bad handshake: stream closed"),
+            Some(Ok(other)) => bail!("unexpected command: {other:?}"),
+            Some(Err(e)) => bail!("IO error: {e}"),
+            None => bail!("client stream closed unexpectedly"),
         };
+        debug!(?hello, "Received client hello");
 
         let (event_tx, event_rx) = mpsc::channel::<NetworkEvent>(128); // TODO: Buffer size
 
@@ -129,8 +146,9 @@ impl Connection {
             event_tx,
         ) {
             Ok(token) => token,
-            Err(e) => todo!("Report error, log error {e}"),
+            Err(e) => return Err(anyhow::anyhow!(e)),
         };
+        debug!(user_id = %user_token.id(), "Username successfully registered, user token created");
 
         // It's important that we create the guard before any more fallible operations, since
         // `handle_new_user` touched persistent state.
@@ -145,8 +163,9 @@ impl Connection {
             }))
             .await
         {
-            todo!("Log error: error sending ServerHello: {e}");
+            bail!("could not send server hello: {e}");
         }
+        debug!("Server hello sent successfully");
 
         Ok((event_rx, guard))
     }
@@ -156,64 +175,94 @@ impl Connection {
     /// Because I don't want to have to pass every variable in `self` to every single helper
     /// function, when I could just do this and call `self.helper()`. State structs are a good
     /// pattern, even if it's purely internal.
+    #[instrument(skip_all, parent = None, fields(
+        user_id = %self.guard.id(),
+        client_addr = %self.client_addr,
+    ))]
     async fn run(mut self) {
-        loop {
+        info!("New connection started");
+
+        'connection: loop {
             tokio::select! {
                 // Commands from the client.
-                network_cmd = self.client_stream.next() => match network_cmd {
-                    Some(cmd) => match cmd {
-                        Ok(cmd) => self.handle_command(cmd).await,
-                        Err(e) => todo!("Log error, report to sender {e}"),
-                    }
+                network_cmd = self.client_stream.next() => {
+                    let Some(res) = network_cmd else {
+                        info!("Client disconnected");
+                        break 'connection;
+                    };
 
-                    None => {
-                        // TODO: Log disconnect
-                        break;
+                    match res {
+                        Ok(cmd) => if let Err(e) = self.handle_command(cmd).await {
+                            warn!(error = %e, "Client connection broke unexpectedly");
+                            break 'connection;
+                        }
+
+                        Err(e) => {
+                            warn!(error = %e, "Error reading command from client");
+                        }
                     }
                 },
 
                 // Global events.
                 event = self.global_event_rx.recv() => match event {
                     Ok(event) => self.send_event_to_client(event).await,
-                    Err(e) => todo!("Log error receiving global event: {e}"),
+
+                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                        warn!("Client lagged by {skipped} global messages. Forcing disconnect.");
+                        break 'connection;
+                    }
+
+                    Err(broadcast::error::RecvError::Closed) => {
+                        unreachable!("Global broadcast channel only closes when the server shuts down");
+                    }
                 },
 
                 // Direct messages.
                 direct_msg = self.event_rx.recv() => match direct_msg {
                     Some(msg) => self.send_event_to_client(msg).await,
-                    None => todo!(),
+                    None => {
+                        unreachable!("Sender side of our MPSC channel only closes when we unregister ourselves from the server");
+                    }
                 },
 
                 // Channel messages.
-                // TODO: Do I need the channel ID at all, or can I remove it to save space?
                 Some(result) = self.channels.next() => {
                     match result {
                         Ok(msg) => self.send_event_to_client(msg).await,
-                        Err(e) => todo!("Log error, report to sender {e}"),
+                        Err(BroadcastStreamRecvError::Lagged(skipped)) => {
+                            warn!("Client lagged by {skipped} channel messages. Forcing disconnect.");
+                            break 'connection;
+                        }
                     }
                 }
 
                 // Cancellation signal.
                 () = self.cancellation_token.cancelled() => {
+                    info!("Received cancellation signal, disconnecting...");
+
                     if let Err(e) = self.client_stream.flush().await {
-                        todo!("Log error: failed to flush on shutdown {e}");
+                        warn!(error = %e, "Could not flush client stream on shutdown");
                     }
 
                     if let Err(e) = self.client_stream.into_inner().shutdown().await {
-                        todo!("Log error: failed to shutdown {e}");
+                        warn!(error = %e, "Failed to shut down cleanly");
                     }
 
-                    break;
+                    info!("Disconnected cleanly");
+                    break 'connection;
                 }
             }
         }
     }
 
-    async fn handle_command(&mut self, command: NetworkCommand) {
+    async fn handle_command(&mut self, command: NetworkCommand) -> anyhow::Result<()> {
         match command {
-            NetworkCommand::ClientHello(_) => todo!("Log error: double hello"),
+            NetworkCommand::ClientHello(_) => {
+                warn!("Received second client hello while already connected");
+            }
 
             NetworkCommand::FetchChannels(_fetch) => {
+                debug!("Client requested channel sync");
                 self.send_event_to_client(NetworkEvent::ChannelSync(ChannelSync {
                     channels: self.server_state.get_all_channel_info(),
                 }))
@@ -221,25 +270,27 @@ impl Connection {
             }
 
             NetworkCommand::FetchUsers(_fetch) => {
+                debug!("Client requested user sync");
                 self.send_event_to_client(NetworkEvent::UserSync(UserSync {
                     users: self.server_state.get_all_user_info(),
                 }))
                 .await;
             }
 
-            NetworkCommand::SendMessage(msg) => self.send_message(msg).await,
+            NetworkCommand::SendMessage(msg) => {
+                debug!(destination = ?msg.destination, "Client sent message");
+                self.send_message(msg).await;
+            }
 
-            NetworkCommand::UpdateInfo(info) => self.update_info(info),
+            NetworkCommand::UpdateInfo(info) => {
+                debug!(?info, "Client requested to update info");
+                self.update_info(info).await?;
+            }
         }
+
+        Ok(())
     }
 
-    async fn send_event_to_client(&mut self, event: NetworkEvent) {
-        if let Err(e) = self.client_stream.send(event).await {
-            todo!("Log error, report to sender {e}");
-        }
-    }
-
-    #[allow(clippy::unused_async)]
     async fn send_message(&mut self, message: SendMessage) {
         let SendMessage {
             destination,
@@ -254,6 +305,7 @@ impl Connection {
                     destination: ReceiveDestination::Channel(channel_id),
                 });
 
+                // TODO: handle `false` case
                 self.server_state.send_event_to_channel(channel_id, event);
             }
 
@@ -264,31 +316,43 @@ impl Connection {
                     destination: ReceiveDestination::User(target_user_id),
                 });
 
+                // TODO: handle `false` case
                 self.server_state
                     .send_event_to_user(target_user_id, event.clone())
                     .await;
 
-                // Can't use send_event_to_client here due to a borrow checker conflict.
                 // We send back to the sender as well to include them in the loopback, such that
                 // they can render their own message in the correct order relative to other messages.
                 // However, if the sender is sending to themselves (a "note to self"), this would
                 // result in a double send. As such, we filter that case out.
-                if target_user_id != self.guard.id()
-                    && let Err(e) = self.client_stream.send(event).await
-                {
-                    todo!("Log error: sender disconnected while sending DM {e}");
-                }
+                self.send_event_to_client(event).await;
             }
         }
     }
 
-    fn update_info(&mut self, new_info: UpdateInfo) {
+    /// Update our user info.
+    async fn update_info(&mut self, new_info: UpdateInfo) -> anyhow::Result<()> {
         if let Err(e) = self.server_state.update_user_info(
             self.guard.token(),
             new_info,
             self.server_state.max_username_length(),
         ) {
-            todo!("Log and report error: {e}");
+            warn!(error = %e, "Failed to update user info");
+
+            self.client_stream
+                .send(NetworkEvent::ErrorEvent(e.into()))
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Send an event to the client associated with this `Connection`.
+    async fn send_event_to_client(&mut self, event: NetworkEvent) {
+        let event_name = event.name();
+
+        if let Err(e) = self.client_stream.send(event).await {
+            warn!(error = %e, event_type = %event_name, "Failed to send event to client");
         }
     }
 }

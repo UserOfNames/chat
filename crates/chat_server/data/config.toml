@@ -1,17 +1,26 @@
-# Host address the listener task binds to
+# Host address the listener task binds to.
 listener_ip = "::1"
 
-# Port the listener task binds to
+# Port the listener task binds to.
 listener_port = 12345
 
-# Path to the TLS certificate file
+# Path to the TLS certificate file.
 # tls_cert_path = ""
 
-# Path to the TLS private key file associated with the certificate
+# Path to the TLS private key file associated with the certificate.
 # tls_key_path = ""
 
-# Maximum allowed length of users' display names
+# Maximum allowed length of users' display names.
 max_username_length = 20
+
+# Whether to write logs to standard output.
+log_to_stdout = true
+
+# Whether to write logs to a file.
+log_to_file = false
+
+# Directory to store the log file if `log_to_file` is true.
+# log_dir = ""
 
 # List of all the channels on the server.
 #

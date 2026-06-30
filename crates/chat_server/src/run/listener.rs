@@ -6,6 +6,7 @@ use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
+use tracing::{debug, info, instrument, warn};
 
 use crate::run::ServerState;
 
@@ -48,27 +49,39 @@ impl Listener {
     }
 
     /// Start an initialized `Listener`. This should be spawned as a [`tokio`] task: `tokio::spawn(listener)`.
+    #[instrument(skip_all, fields(address = %self.bind_address), parent = None)]
     pub async fn start(self) -> io::Result<()> {
         let address = self.bind_address;
 
         let listener = TcpListener::bind(address).await?;
 
+        info!("TCP listener bound and accepting connections");
+
         loop {
             tokio::select! {
                 conn = listener.accept() => match conn {
-                    Ok((stream, _addr)) => {
+                    Ok((stream, peer_addr)) => {
+                        debug!(%peer_addr, "Accepted incoming TCP connection");
+
                         self.task_tracker.spawn(Connection::start(
                             self.server_state.clone(),
                             self.tls_acceptor.clone(),
                             stream,
+                            peer_addr,
                             self.cancellation_token.clone(),
                         ));
                     }
 
-                    Err(e) => todo!("Log listener accept error {e}"),
+                    Err(e) => {
+                        warn!(error = %e, "Failed to accept incoming TCP connection");
+                        continue;
+                    }
                 },
 
-                () = self.cancellation_token.cancelled() => break,
+                () = self.cancellation_token.cancelled() => {
+                    info!("Listener task received cancellation signal, shutting down...");
+                    break;
+                }
             }
         }
 
