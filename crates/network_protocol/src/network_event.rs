@@ -1,4 +1,4 @@
-use std::io;
+use std::{error, fmt, io};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -235,13 +235,15 @@ impl From<UserSync> for proto::UserSync {
 }
 
 /// The type of `ErrorEvent` that occurred.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[non_exhaustive]
 pub enum ErrorKind {
     Unknown,
     NameTaken,
     InvalidName,
+    TargetNotFound,
+    ServerError,
 }
 
 impl TryFrom<i32> for ErrorKind {
@@ -252,6 +254,8 @@ impl TryFrom<i32> for ErrorKind {
             0 => Ok(Self::Unknown),
             1 => Ok(Self::NameTaken),
             2 => Ok(Self::InvalidName),
+            3 => Ok(Self::TargetNotFound),
+            4 => Ok(Self::ServerError),
             _ => Err(()),
         }
     }
@@ -263,7 +267,21 @@ impl From<ErrorKind> for i32 {
             ErrorKind::Unknown => 0,
             ErrorKind::NameTaken => 1,
             ErrorKind::InvalidName => 2,
+            ErrorKind::TargetNotFound => 3,
+            ErrorKind::ServerError => 4,
         }
+    }
+}
+
+impl fmt::Display for ErrorKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", match self {
+            ErrorKind::Unknown => "unknown error",
+            ErrorKind::NameTaken => "username is taken",
+            ErrorKind::InvalidName => "invalid username",
+            ErrorKind::TargetNotFound => "target not found",
+            ErrorKind::ServerError => "fatal server error",
+        })
     }
 }
 
@@ -296,6 +314,14 @@ impl From<ErrorEvent> for proto::ErrorEvent {
         }
     }
 }
+
+impl fmt::Display for ErrorEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.kind, self.message)
+    }
+}
+
+impl error::Error for ErrorEvent {}
 
 /// An event sent from the server to the client backend.
 #[derive(Debug, Clone)]

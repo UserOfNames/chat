@@ -120,6 +120,8 @@ message ErrorEvent {
     UNKNOWN = 0;
     NAME_TAKEN = 1;
     INVALID_NAME = 2;
+    TARGET_NOT_FOUND = 3;
+    SERVER_ERROR = 4;
   }
 
   ErrorCode code = 1;

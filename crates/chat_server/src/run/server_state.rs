@@ -1,5 +1,7 @@
 use dashmap::{DashMap, DashSet};
-use network_protocol::{ChannelId, ChannelInfo, NetworkEvent, UpdateInfo, UserId, UserInfo};
+use network_protocol::{
+    ChannelId, ChannelInfo, ErrorEvent, ErrorKind, NetworkEvent, UpdateInfo, UserId, UserInfo,
+};
 use tokio::sync::{broadcast, mpsc};
 
 use thiserror::Error;
@@ -39,7 +41,38 @@ pub enum UserError {
 
     /// The user ID given is not associated with a known user.
     #[error("user ID '{0}' does not exist")]
-    DoesNotExist(UserId),
+    TargetNotFound(UserId),
+
+    /// Your own user ID is no longer known to the server. This indicates a fatal state mismatch.
+    #[error("fatal state mismatch, your ID was not found on the server")]
+    YourIdNotFound,
+}
+
+impl From<UserError> for ErrorEvent {
+    fn from(value: UserError) -> Self {
+        match value {
+            UserError::Name(e @ UserNameError::AlreadyTaken(_)) => Self {
+                kind: ErrorKind::NameTaken,
+                message: e.to_string(),
+            },
+
+            // All other UserNameError variants are handled the same way
+            UserError::Name(other) => Self {
+                kind: ErrorKind::InvalidName,
+                message: other.to_string(),
+            }, 
+
+            e @ UserError::TargetNotFound(_) => Self {
+                kind: ErrorKind::TargetNotFound,
+                message: e.to_string(),
+            },
+
+            e @ UserError::YourIdNotFound => Self {
+                kind: ErrorKind::ServerError,
+                message: e.to_string(),
+            }
+        }
+    }
 }
 
 /// Error when managing channels on the server.
@@ -310,7 +343,7 @@ impl ServerState {
         let Some(mut proposed_user_info) =
             self.users.get(&token.id()).map(|inner| inner.info.clone())
         else {
-            return Err(UserError::DoesNotExist(token.id()));
+            return Err(UserError::YourIdNotFound);
         };
 
         if let Some(new_name) = new_info.name {
@@ -349,14 +382,14 @@ impl ServerState {
             self.send_global_event(NetworkEvent::UserInfoUpdated(proposed_user_info));
             Ok(())
         } else {
-            Err(UserError::DoesNotExist(token.id()))
+            Err(UserError::YourIdNotFound)
         }
     }
 
     /// Remove a user with the given ID from the server, if the ID is present.
     pub fn remove_user(&self, token: UserToken) -> Result<(), UserError> {
         let Some((_, user)) = self.users.remove(&token.id()) else {
-            return Err(UserError::DoesNotExist(token.id()));
+            return Err(UserError::YourIdNotFound);
         };
 
         let normalized_name = Self::normalize_username(&user.info.name);

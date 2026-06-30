@@ -40,7 +40,10 @@ impl Drop for ConnectionGuard {
         let id = token.id();
 
         match self.server_state.remove_user(token) {
-            Err(UserError::DoesNotExist(_)) => {}
+            Err(UserError::YourIdNotFound) => {
+                todo!("Log error");
+            }
+
             _ => self
                 .server_state
                 .send_global_event(NetworkEvent::UserLeft(id)),
