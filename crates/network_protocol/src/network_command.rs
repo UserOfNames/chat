@@ -186,6 +186,20 @@ pub enum NetworkCommand {
     UpdateInfo(UpdateInfo),
 }
 
+impl NetworkCommand {
+    /// Returns the name of the active variant as an `&'static str`.
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::ClientHello(_) => "ClientHello",
+            Self::FetchChannels(_) => "FetchChannels",
+            Self::FetchUsers(_) => "FetchUsers",
+            Self::SendMessage(_) => "SendMessage",
+            Self::UpdateInfo(_) => "UpdateInfo",
+        }
+    }
+}
+
 impl TryFrom<CommandFrame> for NetworkCommand {
     type Error = io::Error;
 

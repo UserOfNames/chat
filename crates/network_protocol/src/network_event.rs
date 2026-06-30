@@ -325,6 +325,23 @@ pub enum NetworkEvent {
     ErrorEvent(ErrorEvent),
 }
 
+impl NetworkEvent {
+    /// Returns the name of the active variant as an `&'static str`.
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            Self::ServerHello(_) => "ServerHello",
+            Self::ChannelSync(_) => "ChannelSync",
+            Self::UserSync(_) => "UserSync",
+            Self::UserJoined(_) => "UserJoined",
+            Self::UserLeft(_) => "UserLeft",
+            Self::UserInfoUpdated(_) => "UserInfoUpdated",
+            Self::ReceivedMessage(_) => "ReceivedMessage",
+            Self::ErrorEvent(_) => "ErrorEvent",
+        }
+    }
+}
+
 impl TryFrom<EventFrame> for NetworkEvent {
     type Error = io::Error;
 
