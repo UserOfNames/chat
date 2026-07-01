@@ -275,13 +275,17 @@ impl From<ErrorKind> for i32 {
 
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            ErrorKind::Unknown => "unknown error",
-            ErrorKind::NameTaken => "username is taken",
-            ErrorKind::InvalidName => "invalid username",
-            ErrorKind::TargetNotFound => "target not found",
-            ErrorKind::ServerError => "fatal server error",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                ErrorKind::Unknown => "unknown error",
+                ErrorKind::NameTaken => "username is taken",
+                ErrorKind::InvalidName => "invalid username",
+                ErrorKind::TargetNotFound => "target not found",
+                ErrorKind::ServerError => "fatal server error",
+            }
+        )
     }
 }
 

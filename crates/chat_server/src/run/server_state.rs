@@ -60,7 +60,7 @@ impl From<UserError> for ErrorEvent {
             UserError::Name(other) => Self {
                 kind: ErrorKind::InvalidName,
                 message: other.to_string(),
-            }, 
+            },
 
             e @ UserError::TargetNotFound(_) => Self {
                 kind: ErrorKind::TargetNotFound,
@@ -70,7 +70,7 @@ impl From<UserError> for ErrorEvent {
             e @ UserError::YourIdNotFound => Self {
                 kind: ErrorKind::ServerError,
                 message: e.to_string(),
-            }
+            },
         }
     }
 }

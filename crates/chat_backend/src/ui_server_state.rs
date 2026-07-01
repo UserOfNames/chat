@@ -44,7 +44,7 @@ pub struct UIServerState {
 }
 
 impl UIServerState {
-    /// Create a new [`UIState`] instance with small, pre-allocated buffers.
+    /// Create a new [`UIServerState`] instance.
     #[must_use]
     pub fn new(initial_sync: InitialSync) -> Self {
         let InitialSync {
@@ -118,15 +118,15 @@ impl UIServerState {
     fn push_message(&mut self, message: ReceivedMessage) {
         let context = match message.destination {
             // If we sent the message, its context is the destination.
-            ReceiveDestination::User(ref id) if message.sender_id == self.your_id => {
-                MessageContext::User(*id)
+            ReceiveDestination::User(id) if message.sender_id == self.your_id => {
+                MessageContext::User(id)
             }
 
             // Otherwise, the context is the sender.
             ReceiveDestination::User(_) => MessageContext::User(message.sender_id),
 
             // Of course, the context of a channel is just the channel.
-            ReceiveDestination::Channel(ref id) => MessageContext::Channel(*id),
+            ReceiveDestination::Channel(id) => MessageContext::Channel(id),
         };
 
         // Default vector capacity of 128 is only a reasonable default, not a significant value
