@@ -35,7 +35,7 @@ impl Connection {
         let domain = ServerName::try_from(host.to_owned()).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("Invalid TLS host: {e}"),
+                format!("invalid TLS host '{host}': {e}"),
             )
         })?;
 

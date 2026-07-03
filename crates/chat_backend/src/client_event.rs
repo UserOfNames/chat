@@ -69,6 +69,24 @@ pub enum ClientEvent {
     ErrorEvent(ErrorEvent),
 }
 
+impl ClientEvent {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            ClientEvent::InitialSync(_) => "InitialSync",
+            ClientEvent::Disconnected => "Disconnected",
+            ClientEvent::ServerShutDown => "ServerShutDown",
+            ClientEvent::ChannelSync(_) => "ChannelSync",
+            ClientEvent::UserSync(_) => "UserSync",
+            ClientEvent::UserJoined(_) => "UserJoined",
+            ClientEvent::UserLeft(_) => "UserLeft",
+            ClientEvent::UserInfoUpdated(_) => "UserInfoUpdated",
+            ClientEvent::ReceivedMessage(_) => "ReceivedMessage",
+            ClientEvent::ErrorEvent(_) => "ErrorEvent",
+        }
+    }
+}
+
 /// Attempt to convert a [`NetworkEvent`] into a corresponding [`ClientEvent`].
 ///
 /// # Errors

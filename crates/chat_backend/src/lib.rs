@@ -37,6 +37,7 @@ use network_protocol::{
     ClientHello, FetchChannels, FetchUsers, NetworkCommand, NetworkEvent, ServerHello,
 };
 use shared_utils::{NamedProjectDirs, TildeRelativePathBuf, first_match};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::client_event::InitialSync;
 
@@ -135,7 +136,10 @@ impl ChatBackend {
     ///
     /// # Errors
     /// See [`InitError`] for all possible errors from this function.
+    #[instrument(skip_all, err)]
     pub fn new(config_path_override: Option<PathBuf>) -> Result<(Self, BackendHandle), InitError> {
+        debug!("Initializing client backend");
+
         let mut figment = Figment::new().merge(Toml::string(DEFAULT_CONFIG));
 
         let default_paths = DefaultPaths::defaults("client");
@@ -147,6 +151,7 @@ impl ChatBackend {
                 }
 
                 figment = figment.merge(Toml::file(&override_path));
+                debug!(config_path = %override_path.display(), "Overriden config path resolved");
             },
 
             Some(defaults) = default_paths => {
@@ -154,13 +159,16 @@ impl ChatBackend {
 
                 if default_path.exists() {
                     figment = figment.merge(Toml::file(&default_path));
+                    debug!(config_path = %default_path.display(), "Default config path resolved");
                 } else {
                     Self::try_to_write_config_file(&default_path);
+                    debug!(config_path = %default_path.display(), "Wrote default config to disk");
                 }
             },
         };
 
         let config: Config = figment.extract()?;
+        info!("Config resolved");
 
         let mut root_cert_store = RootCertStore::empty();
 
@@ -169,6 +177,8 @@ impl ChatBackend {
         }
 
         for path in config.additional_root_ca_paths {
+            debug!(path = %path.original().display(), "Loading additional root CA cert");
+
             let cert = CertificateDer::from_pem_file(path.resolved()?).map_err(|e| {
                 InitError::CertFileReadFailed {
                     path: path.original().to_owned(),
@@ -202,16 +212,23 @@ impl ChatBackend {
 
     /// Attempt to write the default config file. This is best-effort; if an error occurs, we log
     /// and swallow it.
+    #[instrument(skip_all, fields(path = %path.display()))]
     fn try_to_write_config_file(path: &Path) {
-        #[expect(clippy::collapsible_if)]
-        if let Some(parent) = path.parent() {
-            if let Err(e) = create_dir_all(parent) {
-                // TODO: Log error
-            }
+        if let Some(parent) = path.parent()
+            && let Err(e) = create_dir_all(parent)
+        {
+            warn!(
+                error = %e,
+                parent_path = %parent.display(),
+                "Could not create parent directory for default config file"
+            );
         }
 
         if let Err(e) = write(path, DEFAULT_CONFIG) {
-            // TODO: Log error
+            warn!(
+                error = %e,
+                "Could not write default config file"
+            );
         }
     }
 
@@ -221,10 +238,14 @@ impl ChatBackend {
     /// task. However, if this is not possible (for example, if the frontend expects a synchronous
     /// event loop), one approach is to spawn it in a separate thread using `block_on`, then use
     /// the channels' blocking methods when sending to/receiving from the backend.
-    #[allow(clippy::missing_panics_doc)]
+    #[instrument(skip_all)]
     pub async fn run(mut self) {
-        loop {
+        'backend: loop {
             tokio::select! {
+                // This structure is a bit odd, but it's necessary. We need this `select!` arm to
+                // listen for an event only if we're connected to the server. If we aren't
+                // connected, we want to skip the arm entirely. Therefore, if `self.connection` is
+                // `None`, we trigger a future that never resolves.
                 event = async {
                     match self.connection.as_mut() {
                         Some(conn) => conn.receive_event().await,
@@ -233,29 +254,34 @@ impl ChatBackend {
                 } => {
                     // If the server event is None, the server disconnected from us.
                     let Some(event) = event else {
+                        info!("Server disconnected unexpectedly");
                         self.send_ui_event(ClientEvent::ServerShutDown).await;
                         self.connection = None;
-                        continue;
+                        continue 'backend;
                     };
 
                     match event {
-                        Ok(event) => self.handle_event(event).await,
+                        Ok(event) => {
+                            self.handle_event(event).await;
+                        }
+
                         Err(e) => {
+                            warn!(error = %e, "Error reading event from server");
                             self.send_ui_error(client_event::Error::Io(e)).await;
                             self.connection = None;
-                            continue;
+                            continue 'backend;
                         }
                     }
                 }
 
                 command = self.cmd_rx.recv() => {
-                    if let Some(cmd) = command {
-                        if let ControlFlow::Break(()) = self.handle_command(cmd).await {
-                            break;
-                        }
-                    } else {
-                        self.handle_ui_crash().await;
-                        break;
+                    let Some(command) = command else {
+                        self.handle_ui_crash();
+                        break 'backend;
+                    };
+
+                    if self.handle_command(command).await.is_break() {
+                        break 'backend;
                     }
                 }
             }
@@ -266,16 +292,37 @@ impl ChatBackend {
 
     /// Handle any necessary logic after a UI crash, but before shutting down. Note that
     /// `self.shutdown()` is always called when the application is closing.
-    async fn handle_ui_crash(&mut self) {
-        todo!("Handle UI crash")
+    #[expect(clippy::unused_self)]
+    fn handle_ui_crash(&mut self) {
+        error!("UI crashed");
     }
 
     /// Handle a `ClientCommand` coming from the frontend.
     async fn handle_command(&mut self, command: ClientCommand) -> ControlFlow<()> {
         match command {
-            ClientCommand::Connect(params) => self.connect(params).await,
-            ClientCommand::Disconnect => self.disconnect().await,
-            ClientCommand::Quit => return ControlFlow::Break(()),
+            ClientCommand::Connect(params) => {
+                info!(
+                    host = %params.host,
+                    port = ?params.port,
+                    initial_username = %params.initial_username,
+                    "Command received: connecting to server"
+                );
+
+                self.connect(params).await;
+            }
+
+            ClientCommand::Disconnect => {
+                info!("Command received: disconnecting from server");
+
+                self.disconnect().await;
+            }
+
+            ClientCommand::Quit => {
+                info!("Command received: quitting");
+
+                return ControlFlow::Break(());
+            }
+
             ClientCommand::NetworkCommand(net_cmd) => self.send_network_command(net_cmd).await,
         }
 
@@ -283,26 +330,39 @@ impl ChatBackend {
     }
 
     /// Handle a `NetworkEvent` coming from the server.
+    #[instrument(skip_all, fields(event = %event.name()))]
     async fn handle_event(&mut self, event: NetworkEvent) {
-        let event = match event.try_into() {
+        #[allow(clippy::single_match_else)]
+        let event: ClientEvent = match event.try_into() {
             Ok(event) => event,
-            Err(e) => todo!("Log error"),
+            Err(()) => {
+                warn!("Received invalid event from server, could not convert to client event");
+                return;
+            }
         };
 
+        debug!("Received event from server");
         self.send_ui_event(event).await;
     }
 
     /// Attempt to connect to the server at using the given `ConnectParams`. The UI will be notified
     /// about whether the connection is successful or not.
+    #[instrument(skip_all, fields(
+        host = %params.host,
+        port = ?params.port,
+    ))]
     async fn connect(&mut self, params: ConnectParams) {
         let mut connection =
             match Connection::connect(&params.host, params.port, &self.tls_connector).await {
                 Ok(conn) => conn,
                 Err(e) => {
+                    warn!(error = %e, "Failed to establish TCP+TLS connection to server");
                     self.send_ui_error(e.into()).await;
                     return;
                 }
             };
+
+        debug!("Established TCP+TLS connection to server");
 
         let client_hello = ClientHello {
             requested_name: params.initial_username,
@@ -312,7 +372,7 @@ impl ChatBackend {
             .send_command(NetworkCommand::ClientHello(client_hello))
             .await
         {
-            todo!("Log failed connection");
+            warn!(error = %e, "Failed to send Hello to server");
         }
 
         // We expect the server to send its Hello immediately after we send ours. Otherwise, we
@@ -322,10 +382,26 @@ impl ChatBackend {
             default_channel_id,
         } = match connection.receive_event().await {
             Some(Ok(NetworkEvent::ServerHello(hello))) => hello,
-            Some(Ok(other)) => todo!("Log error: missed HELLO {other:?}"),
-            Some(Err(e)) => todo!("Log error: event error {e}"),
-            None => todo!("Log error: connection closed unexpectedly"),
+
+            Some(Ok(other)) => {
+                warn!(
+                    ?other,
+                    "Failed to connect to server - missed server Hello, got unexpected command"
+                );
+                return;
+            }
+
+            Some(Err(e)) => {
+                warn!(error = %e, "Failed to connect to server - IO error");
+                return;
+            }
+
+            None => {
+                warn!("Failed to connect to server - connection closed unexpectedly");
+                return;
+            }
         };
+        debug!(our_id = %your_id, "Received server Hello");
 
         // Fetch the channel list and initial user list. Currently, we treat this as a full,
         // automatic state dump. In future versions, this may be paginated and done lazily to
@@ -334,27 +410,40 @@ impl ChatBackend {
             .send_command(NetworkCommand::FetchChannels(FetchChannels))
             .await
         {
-            todo!("Log error: failed to request channels {e}")
+            warn!(error = %e, "Failed to connect to server - could not fetch channels");
+            return;
         }
 
         if let Err(e) = connection
             .send_command(NetworkCommand::FetchUsers(FetchUsers))
             .await
         {
-            todo!("Log error: failed to request users {e}")
+            warn!(error = %e, "Failed to connect to server - could not fetch users");
+            return;
         }
 
-        let addr = connection.addr();
+        debug!("Fetched channels and users");
+
+        let server_addr = connection.addr();
+
         self.connection = Some(connection);
+        // At this point, the connection has succeeded. While we may immediately experience a UI
+        // crash and promptly disconnect, that's a subsequent event. At this point, the connection
+        // is done.
+        debug!("Connection succeeded");
+
         self.send_ui_event(ClientEvent::InitialSync(InitialSync {
             your_id,
             default_channel_id,
-            server_addr: addr,
+            server_addr,
         }))
         .await;
     }
 
     /// Disconnect from the server.
+    #[instrument(skip_all, fields(
+        connection_address = ?self.connection.as_ref().map(Connection::addr),
+    ))]
     async fn disconnect(&mut self) {
         let Some(connection) = self.connection.take() else {
             // Disconnecting while already disconnected is a NOP
@@ -362,7 +451,7 @@ impl ChatBackend {
         };
 
         if let Err(e) = connection.disconnect().await {
-            // TODO: Log error
+            warn!(error = %e, "Failed to disconnect cleanly. Disconnection will still proceed");
         }
 
         // Even if the disconnect was not clean, by now, the connection has been consumed and
@@ -374,15 +463,14 @@ impl ChatBackend {
     /// Send a `NetworkCommand` to the server. The UI will be notified if this fails.
     async fn send_network_command(&mut self, command: NetworkCommand) {
         let Some(connection) = &mut self.connection else {
-            // TODO: Log error
-            let kind = io::ErrorKind::NotConnected;
-            let error = io::Error::from(kind);
+            warn!("Tried to send a command, but there's no active connection");
+            let error = io::Error::from(io::ErrorKind::NotConnected);
             self.send_ui_error(error.into()).await;
             return;
         };
 
         if let Err(e) = connection.send_command(command).await {
-            // TODO: Log error
+            warn!(error = %e, "Failed to send command to server");
             self.send_ui_error(e.into()).await;
         }
     }
@@ -390,17 +478,14 @@ impl ChatBackend {
     /// Send a `ClientEvent` to the UI.
     async fn send_ui_event(&mut self, event: ClientEvent) {
         if self.event_tx.send(Ok(event)).await.is_err() {
-            self.handle_ui_crash().await;
-            // TODO: Log error
+            self.handle_ui_crash();
         }
     }
 
     /// Send a `client_event::Error` to the UI.
     async fn send_ui_error(&mut self, error: client_event::Error) {
-        // TODO: Log error
         if self.event_tx.send(Err(error)).await.is_err() {
-            self.handle_ui_crash().await;
-            // TODO: Log error
+            self.handle_ui_crash();
         }
     }
 

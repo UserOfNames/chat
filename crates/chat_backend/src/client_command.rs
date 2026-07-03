@@ -29,3 +29,15 @@ pub enum ClientCommand {
     /// Commands which pass on to the network.
     NetworkCommand(NetworkCommand),
 }
+
+impl ClientCommand {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        match self {
+            ClientCommand::Connect(_) => "Connect",
+            ClientCommand::Disconnect => "Disconnect",
+            ClientCommand::Quit => "Quit",
+            ClientCommand::NetworkCommand(_) => "NetworkCommand",
+        }
+    }
+}

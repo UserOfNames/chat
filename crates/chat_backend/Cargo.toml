@@ -13,6 +13,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 tokio-rustls = { workspace = true }
 tokio-util = { workspace = true }
+tracing = { workspace = true }
 webpki-roots = { workspace = true }
 
 network_protocol = { workspace = true }

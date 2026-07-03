@@ -53,7 +53,6 @@ impl UIServerState {
             server_addr,
         } = initial_sync;
 
-        // None of the pre-allocation numbers are significant; just reasonable defaults
         Self {
             your_id,
             connected_addr: server_addr,
