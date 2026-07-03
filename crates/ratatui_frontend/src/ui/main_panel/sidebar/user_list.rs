@@ -84,7 +84,6 @@ impl UserList {
         };
 
         // Needed when building our ID so the selection marker shows
-        // TODO: your_name variable, maybe?
         let your_id_prefix = if Some(&state.your_id) == selected_user_id {
             "◉ "
         } else {

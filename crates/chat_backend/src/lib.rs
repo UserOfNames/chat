@@ -238,7 +238,6 @@ impl ChatBackend {
     /// task. However, if this is not possible (for example, if the frontend expects a synchronous
     /// event loop), one approach is to spawn it in a separate thread using `block_on`, then use
     /// the channels' blocking methods when sending to/receiving from the backend.
-    #[instrument(skip_all)]
     pub async fn run(mut self) {
         'backend: loop {
             tokio::select! {

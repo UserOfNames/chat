@@ -2,19 +2,19 @@ mod ui;
 
 use std::{io, path::PathBuf};
 
+use anyhow::bail;
 use clap::Parser;
 use crossterm::event::{Event, EventStream, KeyEvent, KeyEventKind};
 use futures::StreamExt;
 use ratatui::{DefaultTerminal, Frame, widgets::Clear};
 use shared_utils::NamedProjectDirs;
-use thiserror::Error;
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::{Duration, interval},
 };
 
 use chat_backend::{
-    ChatBackend, InitError,
+    ChatBackend,
     client_command::ClientCommand,
     client_event::{self, ClientEvent},
     network_protocol::{NetworkCommand, SendDestination, SendMessage},
@@ -42,20 +42,6 @@ struct Args {
     #[arg(long)]
     config_path: Option<PathBuf>,
 }
-
-#[derive(Debug, Error)]
-enum AppError {
-    #[error("I/O error: {0}")]
-    Io(#[from] io::Error),
-
-    #[error("Backend died unexpectedly")]
-    BackendDied,
-
-    #[error("Backend failed to initialize: {0}")]
-    BackendInitFailed(#[from] InitError),
-}
-
-type AppResult = Result<(), AppError>;
 
 /// The main application struct, including widgets, internal state, and communication channels to
 /// the backend.
@@ -100,19 +86,19 @@ impl App {
     }
 
     /// Run the application.
-    async fn run(mut self, terminal: &mut DefaultTerminal) -> AppResult {
+    async fn run(mut self, terminal: &mut DefaultTerminal) -> anyhow::Result<()> {
         // The UI may need to update without any incoming network events or crossterm events, so we
         // set up a periodic tick to render it even if nothing else is happening. 250 isn't a
         // meaningful number, just a reasonable default value.
         let mut render_interval = interval(Duration::from_millis(250));
 
-        loop {
+        'app: loop {
             // This goes at the top of the loop instead of inside the `render_interval.tick()`
             // `select!` arm so that the UI is also responsive to events, not JUST the tick.
             match terminal.draw(|frame| self.draw(frame)) {
                 Ok(_) => {}
-                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
-                Err(e) => return Err(e.into()),
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue 'app,
+                Err(e) => bail!("IO error while drawing terminal frame: {e}"),
             }
 
             tokio::select! {
@@ -128,15 +114,18 @@ impl App {
                         // The self.is_quitting flag is only set if the user explicitly requested
                         // to exit; otherwise, the backend closing was unexpected.
                         None if self.is_quitting => return Ok(()),
-                        None => return Err(AppError::BackendDied),
+                        None => bail!("Client backend closed unexpectedly"),
                     }
                 }
 
                 event = self.event_stream.next() => {
                     match event {
                         Some(Ok(evt)) => self.handle_terminal_event(evt).await,
-                        Some(Err(e)) => todo!(),
-                        None => todo!(),
+
+                        Some(Err(e)) => bail!("IO error while listening for terminal events: {e}"),
+
+                        // We treat this as a forced close, not an error
+                        None => return Ok(()),
                     }
                 }
             }
@@ -204,7 +193,6 @@ impl App {
         // To prevent double-responses to a single press, we only respond to the initial press.
         if let Event::Key(k) = event
             && k.kind == KeyEventKind::Press
-        // Check press vs. release
         {
             self.handle_key_event(k).await;
         }
@@ -287,7 +275,8 @@ impl App {
             Action::YieldFocus => {}
 
             Action::SelectChannel(id) => {
-                // Selecting a channel when not connected is a NOP.
+                // Selecting a channel when not connected should be impossible, but even if it
+                // somehow happens, it's a NOP.
                 let Some(state) = &mut self.ui_server_state else {
                     return;
                 };
@@ -345,7 +334,7 @@ impl DefaultPaths {
 }
 
 #[tokio::main]
-async fn main() -> AppResult {
+async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // HACK: We're dealing with backend information in the frontend. This is because the backend is
@@ -367,10 +356,7 @@ async fn main() -> AppResult {
 
     let (backend, handle) = match ChatBackend::new(args.config_path) {
         Ok((b, h)) => (b, h),
-        Err(e) => {
-            eprintln!("{e}");
-            return Err(e.into());
-        }
+        Err(e) => bail!("Failed to initialize backend: {e}"),
     };
 
     let app = App::new(handle.event_rx, handle.cmd_tx);
