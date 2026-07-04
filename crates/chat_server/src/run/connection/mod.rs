@@ -325,7 +325,9 @@ impl Connection {
                 // they can render their own message in the correct order relative to other messages.
                 // However, if the sender is sending to themselves (a "note to self"), this would
                 // result in a double send. As such, we filter that case out.
-                self.send_event_to_client(event).await;
+                if target_user_id != self.guard.id() {
+                    self.send_event_to_client(event).await;
+                }
             }
         }
     }
