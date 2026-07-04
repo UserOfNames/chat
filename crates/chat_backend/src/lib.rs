@@ -31,15 +31,13 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio_rustls::TlsConnector;
 
 use client_command::{ClientCommand, ConnectParams};
-use client_event::ClientEvent;
+use client_event::{ClientEvent, InitialSync};
 use connection::Connection;
 use network_protocol::{
     ClientHello, FetchChannels, FetchUsers, NetworkCommand, NetworkEvent, ServerHello,
 };
 use shared_utils::{NamedProjectDirs, TildeRelativePathBuf, first_match};
 use tracing::{debug, error, info, instrument, warn};
-
-use crate::client_event::InitialSync;
 
 const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");
 
@@ -80,8 +78,9 @@ struct DefaultPaths {
 }
 
 impl DefaultPaths {
-    /// Initialize a `BackendPaths` instance with default paths.
+    /// Initialize a `DefaultPaths` instance.
     ///
+    /// # Default paths
     /// `config`: `NamedProjectDirs::config_dir()/config.toml`
     fn defaults(component: impl Into<PathBuf>) -> Option<Self> {
         let base = NamedProjectDirs::new(component)?;
@@ -142,7 +141,7 @@ impl ChatBackend {
 
         let mut figment = Figment::new().merge(Toml::string(DEFAULT_CONFIG));
 
-        let default_paths = DefaultPaths::defaults("client");
+        let default_paths = DefaultPaths::defaults("client_backend");
 
         first_match! {
             Some(override_path) = config_path_override => {
@@ -168,7 +167,7 @@ impl ChatBackend {
         };
 
         let config: Config = figment.extract()?;
-        info!("Config resolved");
+        info!("Backend config resolved");
 
         let mut root_cert_store = RootCertStore::empty();
 
@@ -297,6 +296,7 @@ impl ChatBackend {
     }
 
     /// Handle a `ClientCommand` coming from the frontend.
+    #[instrument(skip_all, fields(command = %command.name()))]
     async fn handle_command(&mut self, command: ClientCommand) -> ControlFlow<()> {
         match command {
             ClientCommand::Connect(params) => {
@@ -460,6 +460,7 @@ impl ChatBackend {
     }
 
     /// Send a `NetworkCommand` to the server. The UI will be notified if this fails.
+    #[instrument(skip_all, fields(command = %command.name()))]
     async fn send_network_command(&mut self, command: NetworkCommand) {
         let Some(connection) = &mut self.connection else {
             warn!("Tried to send a command, but there's no active connection");

@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 use network_protocol::{
     ChannelId, ChannelInfo, ReceiveDestination, ReceivedMessage, UserId, UserInfo,
 };
+use tracing::warn;
 
 use crate::client_event::{ClientEvent, InitialSync};
 
@@ -107,9 +108,13 @@ impl UIServerState {
             // may change in the future, we make this a NOP instead of an error.
             ClientEvent::ErrorEvent(_) => {}
 
-            ClientEvent::InitialSync(_) => todo!("Log error (should not sync twice)"),
-            ClientEvent::Disconnected => todo!("Log error (destroy self)"),
-            ClientEvent::ServerShutDown => todo!("Log error (destroy self)"),
+            ClientEvent::InitialSync(_) => warn!(
+                "State invariant violated: received InitialSync but UI state already exists. Ignoring."
+            ),
+
+            ClientEvent::Disconnected | ClientEvent::ServerShutDown => warn!(
+                "State invariant violated: received disconnect event inside state reducer. This should have been handled by the UI directly. Ignoring."
+            ),
         }
     }
 

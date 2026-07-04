@@ -64,17 +64,17 @@ pub struct RunArgs {
     #[arg(long)]
     max_username_length: Option<usize>,
 
-    /// Whether to write logs to standard output.
+    /// Whether to write logs to standard output
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     log_to_stdout: Option<bool>,
 
-    /// Whether to write logs to a file.
+    /// Whether to write logs to a file
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     log_to_file: Option<bool>,
 
-    /// Directory to store the log file if `log_to_file` is true.
+    /// Directory to store the log file if `log_to_file` is true
     #[serde(skip_serializing_if = "Option::is_none")]
     #[arg(long)]
     log_dir: Option<PathBuf>,
@@ -263,11 +263,11 @@ pub async fn main(default_paths: Option<DefaultPaths>, args: RunArgs) -> anyhow:
 
     debug!(config_path = ?config_path, "Configuration resolved");
 
-    info!("Starting server");
     if config.log_to_file {
         info!(log_dir = %config.log_dir.display(), "Background file logging enabled");
     }
 
+    info!("Starting server");
     ChatServer::new(config)
         .context("Initializing server")?
         .run()

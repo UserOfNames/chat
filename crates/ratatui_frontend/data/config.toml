@@ -1,0 +1,8 @@
+# Whether to write logs to a file.
+log_to_file = true
+
+# Directory to store the log file if `log_to_file` is true.
+# log_dir = ""
+
+# Path to the backend's config file.
+# backend_config_path = ""

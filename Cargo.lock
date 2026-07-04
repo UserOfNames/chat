@@ -1682,16 +1682,21 @@ dependencies = [
 name = "ratatui_frontend"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chat_backend",
  "clap",
  "crossterm",
+ "figment",
  "futures",
  "ratatui",
  "ratatui-textarea",
+ "serde",
  "shared_utils",
  "textwrap",
- "thiserror 2.0.18",
  "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
 ]
 
 [[package]]

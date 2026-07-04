@@ -43,8 +43,9 @@ struct DefaultPaths {
 }
 
 impl DefaultPaths {
-    /// Initialize a `ServerPaths` instance with default paths.
+    /// Initialize a `DefaultPaths` instance.
     ///
+    /// # Default paths
     /// `config`: `NamedProjectDirs::config_dir()/config.toml`
     /// `ca_cert`: `NamedProjectDirs::data_dir()/tls/ca/certificate.pem`
     /// `ca_key`: `NamedProjectDirs::data_dir()/tls/ca/key.pem`
