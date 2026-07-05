@@ -1,10 +1,11 @@
-use chat_backend::ui_server_state::UIServerState;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::Stylize,
     widgets::{Paragraph, Widget},
 };
+
+use crate::ui_server_state::UIServerState;
 
 /// Widget that displays the status of the current connection: whether you're connected to a server,
 /// and if so, the address of that server.

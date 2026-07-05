@@ -1,7 +1,6 @@
 pub mod client_command;
 pub mod client_event;
 mod connection;
-pub mod ui_server_state;
 
 /// Convenience re-export of types from [`network_protocol`].
 pub mod network_protocol {

@@ -1,7 +1,6 @@
 mod messages;
 mod sidebar;
 
-use chat_backend::ui_server_state::UIServerState;
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::{Action, KeyHandler, popups::commands::CommandsPopup};
@@ -14,6 +13,8 @@ use ratatui::{
 };
 use ratatui_textarea::TextArea;
 use sidebar::Sidebar;
+
+use crate::ui_server_state::UIServerState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {

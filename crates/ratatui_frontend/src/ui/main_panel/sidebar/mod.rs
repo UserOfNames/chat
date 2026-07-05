@@ -2,7 +2,6 @@ mod channel_list;
 mod connection_status;
 mod user_list;
 
-use chat_backend::ui_server_state::UIServerState;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
@@ -14,7 +13,10 @@ use channel_list::ChannelList;
 use connection_status::ConnectionStatus;
 use user_list::UserList;
 
-use crate::ui::{Action, KeyHandler};
+use crate::{
+    ui::{Action, KeyHandler},
+    ui_server_state::UIServerState,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {

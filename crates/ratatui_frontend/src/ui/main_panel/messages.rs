@@ -1,3 +1,4 @@
+use chat_backend::client_event::ReceivedMessage;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -6,10 +7,7 @@ use ratatui::{
     widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use chat_backend::{
-    client_event::ReceivedMessage,
-    ui_server_state::{MessageContext, UIServerState},
-};
+use crate::ui_server_state::{MessageContext, UIServerState};
 
 #[derive(Debug)]
 pub struct Messages {

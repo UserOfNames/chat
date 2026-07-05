@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use network_protocol::{
+use chat_backend::network_protocol::{
     ChannelId, ChannelInfo, ReceiveDestination, ReceivedMessage, UserId, UserInfo,
 };
 use tracing::warn;
@@ -19,9 +19,6 @@ pub enum MessageContext {
 /// server, a list of channels and users, the message history, etc.
 ///
 /// Includes a helper method to easily update the state using [`ClientEvent`]s.
-///
-/// Note that a UI is free to implement its own state handling based on [`ClientEvent`]s if desired.
-/// This is provided for convenience, as a reasonable default implementation.
 #[derive(Debug)]
 pub struct UIServerState {
     /// Your user ID for the session.

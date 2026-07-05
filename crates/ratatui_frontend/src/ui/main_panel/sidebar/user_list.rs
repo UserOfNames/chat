@@ -1,7 +1,4 @@
-use chat_backend::{
-    network_protocol::UserId,
-    ui_server_state::{MessageContext, UIServerState},
-};
+use chat_backend::network_protocol::UserId;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Rect},
@@ -9,6 +6,8 @@ use ratatui::{
     text::Line,
     widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget, Widget},
 };
+
+use crate::ui_server_state::{MessageContext, UIServerState};
 
 /// Widget that displays a scrollable list of users in the current server.
 #[derive(Debug)]

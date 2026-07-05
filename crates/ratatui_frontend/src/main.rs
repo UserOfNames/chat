@@ -1,8 +1,15 @@
 mod ui;
+mod ui_server_state;
 
 use std::{io, path::PathBuf};
 
 use anyhow::{Context, bail};
+use chat_backend::{
+    ChatBackend,
+    client_command::ClientCommand,
+    client_event::{self, ClientEvent},
+    network_protocol::{NetworkCommand, SendDestination, SendMessage},
+};
 use clap::Parser;
 use crossterm::event::{Event, EventStream, KeyEvent, KeyEventKind};
 use figment::{
@@ -18,17 +25,9 @@ use tokio::{
     time::{Duration, interval},
 };
 use tracing::{debug, info, instrument, warn};
-
-use chat_backend::{
-    ChatBackend,
-    client_command::ClientCommand,
-    client_event::{self, ClientEvent},
-    network_protocol::{NetworkCommand, SendDestination, SendMessage},
-    ui_server_state::{MessageContext, UIServerState},
-};
-
 use tracing_appender::{non_blocking::WorkerGuard, rolling};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
 use ui::{
     Action, KeyHandler,
     main_panel::MainPanel,
@@ -38,6 +37,7 @@ use ui::{
         popup_area,
     },
 };
+use ui_server_state::{MessageContext, UIServerState};
 
 const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");
 
