@@ -4,7 +4,6 @@ use std::net::SocketAddr;
 use chat_backend::network_protocol::{
     ChannelId, ChannelInfo, ReceiveDestination, ReceivedMessage, UserId, UserInfo,
 };
-use tracing::warn;
 
 use crate::client_event::{ClientEvent, InitialSync};
 
@@ -105,12 +104,13 @@ impl ConnectionState {
             // in the future, we make this a NOP instead of an error.
             ClientEvent::ErrorEvent(_) => {}
 
-            ClientEvent::InitialSync(_) => warn!(
-                "State invariant violated: received InitialSync but UI state already exists. Ignoring."
+            // ==== INVALID EVENTS ====
+            ClientEvent::InitialSync(_) => unreachable!(
+                "Initial sync should result in the creation of a ConnectionState, not be routed to it"
             ),
 
-            ClientEvent::Disconnected | ClientEvent::ServerShutDown => warn!(
-                "State invariant violated: received disconnect event inside state reducer. This should have been handled by the UI directly. Ignoring."
+            ClientEvent::Disconnected | ClientEvent::ServerShutDown => unreachable!(
+                "Disconnection events should result in the destruction of CreationState, not be routed to it"
             ),
         }
     }
