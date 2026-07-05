@@ -2,7 +2,7 @@ mod guard;
 
 use std::{net::SocketAddr, sync::Arc};
 
-use anyhow::bail;
+use anyhow::{Context, bail};
 use futures::{
     SinkExt, StreamExt,
     stream::{SelectAll, select_all},
@@ -121,7 +121,18 @@ impl Connection {
             guard,
         };
 
-        connection.run().await;
+        let user_id = connection.guard.id();
+        info!(%user_id, "Starting connection");
+
+        if let Err(e) = connection.run().await {
+            warn!(
+                error = %e,
+                %user_id,
+                "Connection terminated with error"
+            );
+        } else {
+            info!(%user_id, "Connection terminated cleanly");
+        }
     }
 
     /// Perform the application-level handshake.
@@ -175,27 +186,26 @@ impl Connection {
     /// Because I don't want to have to pass every variable in `self` to every single helper
     /// function, when I could just do this and call `self.helper()`. State structs are a good
     /// pattern, even if it's purely internal.
-    #[instrument(skip_all, parent = None, fields(
-        user_id = %self.guard.id(),
-        client_addr = %self.client_addr,
-    ))]
-    async fn run(mut self) {
-        info!("New connection started");
-
+    #[instrument(
+        skip_all,
+        parent = None,
+        fields(
+            user_id = %self.guard.id(),
+            client_addr = %self.client_addr,
+        ),
+    )]
+    async fn run(mut self) -> anyhow::Result<()> {
         'connection: loop {
             tokio::select! {
                 // Commands from the client.
                 network_cmd = self.client_stream.next() => {
                     let Some(res) = network_cmd else {
                         info!("Client disconnected");
-                        break 'connection;
+                        return Ok(());
                     };
 
                     match res {
-                        Ok(cmd) => if let Err(e) = self.handle_command(cmd).await {
-                            warn!(error = %e, "Client connection broke unexpectedly");
-                            break 'connection;
-                        }
+                        Ok(cmd) => self.handle_command(cmd).await?,
 
                         Err(e) => {
                             warn!(error = %e, "Error reading command from client");
@@ -205,11 +215,10 @@ impl Connection {
 
                 // Global events.
                 event = self.global_event_rx.recv() => match event {
-                    Ok(event) => self.send_event_to_client(event).await,
+                    Ok(event) => self.send_event_to_client(event).await?,
 
                     Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                        warn!("Client lagged by {skipped} global messages. Forcing disconnect.");
-                        break 'connection;
+                        bail!("Client lagged by {skipped} global messages. Forcing disconnect.");
                     }
 
                     Err(broadcast::error::RecvError::Closed) => {
@@ -219,7 +228,7 @@ impl Connection {
 
                 // Direct messages.
                 direct_msg = self.event_rx.recv() => match direct_msg {
-                    Some(msg) => self.send_event_to_client(msg).await,
+                    Some(msg) => self.send_event_to_client(msg).await?,
                     None => {
                         unreachable!("Sender side of our MPSC channel only closes when we unregister ourselves from the server");
                     }
@@ -228,10 +237,10 @@ impl Connection {
                 // Channel messages.
                 Some(result) = self.channels.next() => {
                     match result {
-                        Ok(msg) => self.send_event_to_client(msg).await,
+                        Ok(msg) => self.send_event_to_client(msg).await?,
+
                         Err(BroadcastStreamRecvError::Lagged(skipped)) => {
-                            warn!("Client lagged by {skipped} channel messages. Forcing disconnect.");
-                            break 'connection;
+                            bail!("Client lagged by {skipped} global messages. Forcing disconnect.");
                         }
                     }
                 }
@@ -248,11 +257,12 @@ impl Connection {
                         warn!(error = %e, "Failed to shut down cleanly");
                     }
 
-                    info!("Disconnected cleanly");
                     break 'connection;
                 }
             }
         }
+
+        Ok(())
     }
 
     async fn handle_command(&mut self, command: NetworkCommand) -> anyhow::Result<()> {
@@ -266,7 +276,7 @@ impl Connection {
                 self.send_event_to_client(NetworkEvent::ChannelSync(ChannelSync {
                     channels: self.server_state.get_all_channel_info(),
                 }))
-                .await;
+                .await?;
             }
 
             NetworkCommand::FetchUsers(_fetch) => {
@@ -274,12 +284,12 @@ impl Connection {
                 self.send_event_to_client(NetworkEvent::UserSync(UserSync {
                     users: self.server_state.get_all_user_info(),
                 }))
-                .await;
+                .await?;
             }
 
             NetworkCommand::SendMessage(msg) => {
                 debug!(destination = ?msg.destination, "Client sent message");
-                self.send_message(msg).await;
+                self.send_message(msg).await?;
             }
 
             NetworkCommand::UpdateInfo(info) => {
@@ -291,7 +301,9 @@ impl Connection {
         Ok(())
     }
 
-    async fn send_message(&mut self, message: SendMessage) {
+    /// Send a chat message.
+    #[instrument(skip_all, fields(destination = ?message.destination))]
+    async fn send_message(&mut self, message: SendMessage) -> anyhow::Result<()> {
         let SendMessage {
             destination,
             contents,
@@ -305,8 +317,9 @@ impl Connection {
                     destination: ReceiveDestination::Channel(channel_id),
                 });
 
-                // TODO: handle `false` case
-                self.server_state.send_event_to_channel(channel_id, event);
+                if let Err(e) = self.server_state.send_event_to_channel(channel_id, event) {
+                    warn!(error = %e, "Failed to send message to target channel");
+                }
             }
 
             SendDestination::User(target_user_id) => {
@@ -316,23 +329,31 @@ impl Connection {
                     destination: ReceiveDestination::User(target_user_id),
                 });
 
-                // TODO: handle `false` case
-                self.server_state
+                if let Err(e) = self
+                    .server_state
                     .send_event_to_user(target_user_id, event.clone())
-                    .await;
+                    .await
+                {
+                    warn!(error = %e, "Failed to send message to target user");
+                }
 
                 // We send back to the sender as well to include them in the loopback, such that
                 // they can render their own message in the correct order relative to other messages.
                 // However, if the sender is sending to themselves (a "note to self"), this would
                 // result in a double send. As such, we filter that case out.
                 if target_user_id != self.guard.id() {
-                    self.send_event_to_client(event).await;
+                    self.send_event_to_client(event).await?;
                 }
             }
         }
+
+        Ok(())
     }
 
     /// Update our user info.
+    #[instrument(skip_all, fields(
+        new_username = ?new_info.name,
+    ))]
     async fn update_info(&mut self, new_info: UpdateInfo) -> anyhow::Result<()> {
         if let Err(e) = self.server_state.update_user_info(
             self.guard.token(),
@@ -341,8 +362,7 @@ impl Connection {
         ) {
             warn!(error = %e, "Failed to update user info");
 
-            self.client_stream
-                .send(NetworkEvent::ErrorEvent(e.into()))
+            self.send_event_to_client(NetworkEvent::ErrorEvent(e.into()))
                 .await?;
         }
 
@@ -350,11 +370,19 @@ impl Connection {
     }
 
     /// Send an event to the client associated with this `Connection`.
-    async fn send_event_to_client(&mut self, event: NetworkEvent) {
+    async fn send_event_to_client(&mut self, event: NetworkEvent) -> anyhow::Result<()> {
         let event_name = event.name();
 
-        if let Err(e) = self.client_stream.send(event).await {
-            warn!(error = %e, event_type = %event_name, "Failed to send event to client");
-        }
+        self.client_stream
+            .send(event)
+            .await
+            .inspect_err(|e| warn!(
+                error = %e,
+                event_type = %event_name,
+                "Failed to send event to client. The client stream is likely dead. Terminating connection."
+            ))
+            .context("Sending event to client")?;
+
+        Ok(())
     }
 }

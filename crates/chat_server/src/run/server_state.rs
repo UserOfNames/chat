@@ -78,8 +78,13 @@ impl From<UserError> for ErrorEvent {
 /// Error when managing channels on the server.
 #[derive(Debug, Clone, Error)]
 pub enum ChannelError {
+    /// Attempted to add a channel ID that already exists.
     #[error("duplicate channel ID: {0}")]
     AlreadyExists(ChannelId),
+
+    /// Attempted to access a channel ID that does not exist.
+    #[error("channel does not exist: {0}")]
+    DoesNotExist(ChannelId),
 }
 
 /// Unique token representing a specific user. This wraps the user's `UserId`, but can't be forged
@@ -174,17 +179,22 @@ impl ServerState {
     /// Send a [`NetworkEvent`] to a channel with the given ID, if that ID is associated with a
     /// channel on the server.
     ///
-    /// Returns `false` if the channel was not present.
-    pub fn send_event_to_channel(&self, target_id: ChannelId, event: NetworkEvent) -> bool {
+    /// # Errors
+    /// Returns [`ChannelError::DoesNotExist`] if the target channel ID was not found.
+    pub fn send_event_to_channel(
+        &self,
+        target_id: ChannelId,
+        event: NetworkEvent,
+    ) -> Result<(), ChannelError> {
         let Some(channel) = self.channels.get(&target_id) else {
-            return false;
+            return Err(ChannelError::DoesNotExist(target_id));
         };
 
         // The only failure condition for sending through a broadcast channel is if there are no
         // receivers, but we don't actually care if nobody gets this message. As such, we ignore
         // this error.
         let _: Result<_, _> = channel.broadcast.send(event);
-        true
+        Ok(())
     }
 
     /// Add a new channel to the server.
@@ -238,19 +248,24 @@ impl ServerState {
     /// Send a [`NetworkEvent`] to a client with the given ID, if that ID is associated with a user
     /// on the server.
     ///
-    /// Returns `true` if the user was present.
-    pub async fn send_event_to_user(&self, target_id: UserId, event: NetworkEvent) -> bool {
+    /// # Errors
+    /// Returns [`UserError::TargetNotFound`] if the target ID was not found.
+    pub async fn send_event_to_user(
+        &self,
+        target_id: UserId,
+        event: NetworkEvent,
+    ) -> Result<(), UserError> {
         // We have to do it this way to avoid holding the lock over the `await` point, which could
         // deadlock.
         let sender = {
             let Some(user) = self.users.get(&target_id) else {
-                return false;
+                return Err(UserError::TargetNotFound(target_id));
             };
             user.sender.clone()
         };
 
         let _: Result<_, _> = sender.send(event).await;
-        true
+        Ok(())
     }
 
     /// Register a new (ID, name) user pair. This will:
