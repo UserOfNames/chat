@@ -15,13 +15,15 @@ use ratatui::{
 pub struct UserList {
     list_state: ListState,
     rendered_order: Vec<UserId>,
+    borders: Borders,
 }
 
 impl UserList {
-    pub fn new() -> Self {
+    pub fn new(borders: Borders) -> Self {
         Self {
             list_state: ListState::default(),
             rendered_order: Vec::new(),
+            borders,
         }
     }
 
@@ -55,7 +57,7 @@ impl UserList {
         let title = Line::from_iter([" [u]".bold().blue(), "sers ".into()]);
 
         let block = Block::default()
-            .borders(Borders::TOP)
+            .borders(self.borders)
             .title(title)
             .title_alignment(Alignment::Center)
             .border_style(border_and_highlight_style);

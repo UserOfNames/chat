@@ -15,13 +15,15 @@ use ratatui::{
 pub struct ChannelList {
     list_state: ListState,
     rendered_order: Vec<ChannelId>,
+    borders: Borders,
 }
 
 impl ChannelList {
-    pub fn new() -> Self {
+    pub fn new(borders: Borders) -> Self {
         Self {
             list_state: ListState::default().with_selected(Some(0)),
             rendered_order: Vec::new(),
+            borders,
         }
     }
 
@@ -55,7 +57,7 @@ impl ChannelList {
         let title = Line::from_iter([" [c]".bold().blue(), "hannels ".into()]);
 
         let block = Block::default()
-            .borders(Borders::TOP)
+            .borders(self.borders)
             .title(title)
             .title_alignment(Alignment::Center)
             .border_style(border_and_highlight_style);

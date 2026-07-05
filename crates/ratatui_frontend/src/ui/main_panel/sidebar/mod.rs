@@ -7,7 +7,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
-    widgets::{Block, Widget},
+    widgets::{Block, Borders, Widget},
 };
 
 use channel_list::ChannelList;
@@ -36,8 +36,8 @@ impl Sidebar {
         Self {
             focus: Focus::Unfocused,
             connection_status: ConnectionStatus::new(),
-            channel_list: ChannelList::new(),
-            user_list: UserList::new(),
+            channel_list: ChannelList::new(Borders::TOP),
+            user_list: UserList::new(Borders::TOP),
         }
     }
 
