@@ -15,7 +15,7 @@ use user_list::UserList;
 
 use crate::{
     ui::{Action, KeyHandler},
-    ui_server_state::UIServerState,
+    connection_state::ConnectionState,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,7 +43,7 @@ impl Sidebar {
         }
     }
 
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&UIServerState>) {
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&ConnectionState>) {
         let outer_block = Block::bordered();
         let inner_area = outer_block.inner(area);
 

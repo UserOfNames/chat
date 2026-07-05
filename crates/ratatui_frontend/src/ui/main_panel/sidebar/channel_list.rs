@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use crate::ui_server_state::{MessageContext, UIServerState};
+use crate::connection_state::{MessageContext, ConnectionState};
 
 /// Widget that displays a scrollable list of channels in the current server.
 #[derive(Debug)]
@@ -44,7 +44,7 @@ impl ChannelList {
         &mut self,
         area: Rect,
         buf: &mut Buffer,
-        state: Option<&UIServerState>,
+        state: Option<&ConnectionState>,
         focused: bool,
     ) {
         let border_and_highlight_style = if focused {

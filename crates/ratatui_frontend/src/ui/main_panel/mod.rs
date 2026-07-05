@@ -14,7 +14,7 @@ use ratatui::{
 use ratatui_textarea::TextArea;
 use sidebar::Sidebar;
 
-use crate::ui_server_state::UIServerState;
+use crate::connection_state::ConnectionState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {
@@ -53,7 +53,7 @@ impl MainPanel {
         self.input.clear();
     }
 
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&UIServerState>) {
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&ConnectionState>) {
         let [message_part, sidebar] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![Constraint::Percentage(80), Constraint::Percentage(20)])

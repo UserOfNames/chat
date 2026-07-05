@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use crate::ui_server_state::{MessageContext, UIServerState};
+use crate::connection_state::{MessageContext, ConnectionState};
 
 #[derive(Debug)]
 pub struct Messages {
@@ -21,7 +21,7 @@ impl Messages {
         }
     }
 
-    pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&UIServerState>) {
+    pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&ConnectionState>) {
         let title = match state.and_then(|state| state.message_context.as_ref()) {
             Some(MessageContext::Channel(id)) => {
                 let name = state
@@ -65,7 +65,7 @@ impl Messages {
     fn build_message_item<'a>(
         &self,
         message: &'a ReceivedMessage,
-        state: &'a UIServerState,
+        state: &'a ConnectionState,
         max_width: u16,
     ) -> ListItem<'a> {
         let header_style = if message.sender_id == state.your_id {

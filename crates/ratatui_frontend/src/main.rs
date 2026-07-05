@@ -1,5 +1,5 @@
+mod connection_state;
 mod ui;
-mod ui_server_state;
 
 use std::{io, path::PathBuf};
 
@@ -28,6 +28,7 @@ use tracing::{debug, info, instrument, warn};
 use tracing_appender::{non_blocking::WorkerGuard, rolling};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use connection_state::{ConnectionState, MessageContext};
 use ui::{
     Action, KeyHandler,
     main_panel::MainPanel,
@@ -37,7 +38,6 @@ use ui::{
         popup_area,
     },
 };
-use ui_server_state::{MessageContext, UIServerState};
 
 const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");
 
@@ -91,7 +91,7 @@ struct Config {
 #[derive(Debug)]
 struct App {
     /// State for the current server connection, if any.
-    ui_server_state: Option<UIServerState>,
+    connection_state: Option<ConnectionState>,
 
     /// Channel for receiving events (or errors) from the backend.
     backend_receiver: Receiver<client_event::Result>,
@@ -118,7 +118,7 @@ impl App {
     /// that should be created first, and the relevant channels should be given to this method.
     fn new(receiver: Receiver<client_event::Result>, sender: Sender<ClientCommand>) -> Self {
         Self {
-            ui_server_state: None,
+            connection_state: None,
             backend_receiver: receiver,
             backend_sender: sender,
             event_stream: EventStream::new(),
@@ -191,7 +191,7 @@ impl App {
         self.main_panel.render(
             frame.area(),
             frame.buffer_mut(),
-            self.ui_server_state.as_ref(),
+            self.connection_state.as_ref(),
         );
 
         // Since popups are a stack, we only render the 'top' one.
@@ -211,28 +211,29 @@ impl App {
         match event {
             ClientEvent::InitialSync(sync) => {
                 info!(addr = %sync.server_addr, "Connected to server, initialized UI state");
-                self.ui_server_state = Some(UIServerState::new(sync));
+                self.connection_state = Some(ConnectionState::new(sync));
             }
 
             ClientEvent::Disconnected => {
                 info!("Disconnected from server, dropping UI state");
                 self.notify("Disconnected".to_owned(), NoticeLevel::Notification)
                     .await;
-                self.ui_server_state = None;
+                self.connection_state = None;
             }
 
             ClientEvent::ServerShutDown => {
                 warn!("Server shut down while connected, dropping UI state");
                 self.notify("The server shut down.".to_owned(), NoticeLevel::Warning)
                     .await;
-                self.ui_server_state = None;
+                self.connection_state = None;
             }
 
-            // Remaining events should all be auto-routable to the UIServerState instance. If not,
-            // we failed to handle a special case in this match statement.
+            // Remaining events should all be auto-routable to the ConnectionState instance. If not,
+            // we failed to handle a special case in this match statement. If there is no
+            // connection, we treat it as a NOP.
             _ => {
-                if let Some(ui_server_state) = &mut self.ui_server_state {
-                    ui_server_state.update_from_event(event);
+                if let Some(connection_state) = &mut self.connection_state {
+                    connection_state.update_from_event(event);
                 }
             }
         }
@@ -246,7 +247,7 @@ impl App {
         self.notify(message, NoticeLevel::Error).await;
 
         // If we received an error, we can assume the connection is dead.
-        self.ui_server_state = None;
+        self.connection_state = None;
     }
 
     /// Handle a `Crossterm` event. This forwards to a more specific method.
@@ -292,7 +293,7 @@ impl App {
             }
 
             Action::SendMessage(message) => {
-                let Some(state) = &self.ui_server_state else {
+                let Some(state) = &self.connection_state else {
                     self.notify(
                         "Cannot send message: not connected to a server".to_owned(),
                         NoticeLevel::Error,
@@ -339,7 +340,7 @@ impl App {
             Action::SelectChannel(id) => {
                 // Selecting a channel when not connected should be impossible, but even if it
                 // somehow happens, it's a NOP.
-                let Some(state) = &mut self.ui_server_state else {
+                let Some(state) = &mut self.connection_state else {
                     return;
                 };
 
@@ -348,7 +349,7 @@ impl App {
 
             Action::SelectUser(id) => {
                 // Selecting a user when not connected is a NOP.
-                let Some(state) = &mut self.ui_server_state else {
+                let Some(state) = &mut self.connection_state else {
                     return;
                 };
 

@@ -20,7 +20,7 @@ pub enum MessageContext {
 ///
 /// Includes a helper method to easily update the state using [`ClientEvent`]s.
 #[derive(Debug)]
-pub struct UIServerState {
+pub struct ConnectionState {
     /// Your user ID for the session.
     pub your_id: UserId,
 
@@ -41,8 +41,8 @@ pub struct UIServerState {
     pub messages: HashMap<MessageContext, Vec<ReceivedMessage>>,
 }
 
-impl UIServerState {
-    /// Create a new [`UIServerState`] instance.
+impl ConnectionState {
+    /// Create a new [`ConnectionState`] instance.
     #[must_use]
     pub fn new(initial_sync: InitialSync) -> Self {
         let InitialSync {
@@ -67,8 +67,8 @@ impl UIServerState {
     /// Most [`ClientEvent`] variants are valid for this method, but some must be handled specially:
     /// * [`ClientEvent::InitialSync`]: There should only be one [`InitialSync`], which is passed to
     ///   [`Self::new`].
-    /// * [`ClientEvent::Disconnected`]: This should result in the total destruction of [`Self`].
-    /// * [`ClientEvent::ServerShutDown`]: This should result in the total destruction of [`Self`].
+    /// * [`ClientEvent::Disconnected`]: This should result in dropping [`Self`].
+    /// * [`ClientEvent::ServerShutDown`]: This should result in dropping [`Self`].
     pub fn update_from_event(&mut self, event: ClientEvent) {
         match event {
             ClientEvent::UserSync(sync) => {
@@ -101,8 +101,8 @@ impl UIServerState {
 
             ClientEvent::UserInfoUpdated(info) => self.update_info(info),
 
-            // Currently, no server errors demand a state update on the client side. Because this
-            // may change in the future, we make this a NOP instead of an error.
+            // Currently, no server errors demand a ConnectionState update. Because this may change
+            // in the future, we make this a NOP instead of an error.
             ClientEvent::ErrorEvent(_) => {}
 
             ClientEvent::InitialSync(_) => warn!(
