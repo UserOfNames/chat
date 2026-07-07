@@ -66,9 +66,9 @@ impl ChannelList {
             return;
         };
 
-        // === Rebuild the rendering order cache ===
-        self.rendered_order.clear();
-        self.rendered_order = state.channels.keys().copied().collect();
+        // TODO: Investigate ways to eliminate this requirement
+        // We need our own clone of the rendering order cache for `self.select`
+        self.rendered_order.clone_from(&state.channel_render_order);
 
         let current_channel = match &state.message_context {
             Some(MessageContext::Channel(id)) => state.channels.get(id),

@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-use chat_backend::network_protocol::{
-    ChannelId, ChannelInfo, ReceiveDestination, ReceivedMessage, UserId, UserInfo,
+use chat_backend::{
+    client_event::{ClientEvent, InitialSync},
+    network_protocol::{ChannelId, ReceiveDestination, ReceivedMessage, UserId, UserInfo},
 };
 
-use crate::client_event::{ClientEvent, InitialSync};
+const CHANNEL_INIT_CAPACITY: usize = 64;
+const USER_INIT_CAPACITY: usize = 128;
+const MESSAGE_INIT_CAPACITY: usize = 1024;
 
 /// What message list to display.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -33,8 +36,14 @@ pub struct ConnectionState {
     /// List of channels in the current server.
     pub channels: HashMap<ChannelId, String>,
 
+    /// Order in which channels are rendered.
+    pub channel_render_order: Vec<ChannelId>,
+
     /// List of users in the current server.
     pub users: HashMap<UserId, String>,
+
+    /// Order in which users are rendered.
+    pub user_render_order: Vec<UserId>,
 
     /// Message history in the current server.
     pub messages: HashMap<MessageContext, Vec<ReceivedMessage>>,
@@ -54,9 +63,11 @@ impl ConnectionState {
             your_id,
             connected_addr: server_addr,
             message_context: default_channel_id.map(MessageContext::Channel),
-            channels: HashMap::new(),
-            users: HashMap::new(),
-            messages: HashMap::new(),
+            channels: HashMap::with_capacity(CHANNEL_INIT_CAPACITY),
+            channel_render_order: Vec::with_capacity(CHANNEL_INIT_CAPACITY),
+            users: HashMap::with_capacity(USER_INIT_CAPACITY),
+            user_render_order: Vec::with_capacity(USER_INIT_CAPACITY),
+            messages: HashMap::with_capacity(MESSAGE_INIT_CAPACITY),
         }
     }
 
@@ -71,19 +82,20 @@ impl ConnectionState {
     pub fn update_from_event(&mut self, event: ClientEvent) {
         match event {
             ClientEvent::UserSync(sync) => {
-                for UserInfo { id, name } in sync.users {
-                    self.users.insert(id, name);
-                }
+                self.users
+                    .extend(sync.users.into_iter().map(|user| (user.id, user.name)));
+                self.rebuild_user_cache();
             }
 
             ClientEvent::ChannelSync(sync) => {
-                for ChannelInfo { id, name } in sync.channels {
-                    self.channels.insert(id, name);
-                }
+                self.channels
+                    .extend(sync.channels.into_iter().map(|user| (user.id, user.name)));
+                self.rebuild_channel_cache();
             }
 
             ClientEvent::UserJoined(user_info) => {
                 self.users.insert(user_info.id, user_info.name);
+                self.rebuild_user_cache();
             }
 
             ClientEvent::UserLeft(user_id) => {
@@ -94,11 +106,15 @@ impl ConnectionState {
                 }
 
                 self.users.remove(&user_id);
+                self.rebuild_user_cache();
+            }
+
+            ClientEvent::UserInfoUpdated(info) => {
+                self.update_info(info);
+                self.rebuild_user_cache();
             }
 
             ClientEvent::ReceivedMessage(message) => self.push_message(message),
-
-            ClientEvent::UserInfoUpdated(info) => self.update_info(info),
 
             // Currently, no server errors demand a ConnectionState update. Because this may change
             // in the future, we make this a NOP instead of an error.
@@ -150,5 +166,43 @@ impl ConnectionState {
     /// Get the name of a user with the given ID, if known.
     pub fn get_user_name(&self, id: UserId) -> Option<&str> {
         self.users.get(&id).map(String::as_str)
+    }
+
+    /// Rebuild [`Self::user_render_order`].
+    fn rebuild_user_cache(&mut self) {
+        // TODO: Optimize
+        let mut others: Vec<UserId> = self
+            .users
+            .keys()
+            .copied()
+            .filter(|id| *id != self.your_id)
+            .collect();
+
+        others.sort_by_key(|id| {
+            self.users
+                .get(id)
+                .expect("We just got the ID list from the hashmap keys, and nothing else could have changed the map in between")
+                .to_lowercase()
+        });
+
+        self.user_render_order.clear();
+        self.user_render_order.push(self.your_id);
+        self.user_render_order.append(&mut others);
+    }
+
+    /// Rebuild [`Self::channel_render_order`].
+    fn rebuild_channel_cache(&mut self) {
+        // TODO: Optimize
+        let mut channels: Vec<ChannelId> = self.channels.keys().copied().collect();
+
+        channels.sort_by_key(|id| {
+            self.channels
+                .get(id)
+                .expect("We just got the ID list from the hashmap keys, and nothing else could have changed the map in between")
+                .to_lowercase()
+        });
+
+        self.channel_render_order.clear();
+        self.channel_render_order.append(&mut channels);
     }
 }

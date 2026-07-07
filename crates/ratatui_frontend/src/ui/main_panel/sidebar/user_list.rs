@@ -66,18 +66,9 @@ impl UserList {
             return;
         };
 
-        // === Rebuild the rendering order cache ===
-        // We want to show our user ID at the top, so we push it first and join the rest after it
-        self.rendered_order.clear();
-        self.rendered_order.reserve(state.users.len());
-
-        self.rendered_order.push(state.your_id);
-
-        for user_id in state.users.keys() {
-            if user_id != &state.your_id {
-                self.rendered_order.push(*user_id);
-            }
-        }
+        // TODO: Investigate ways to eliminate this requirement
+        // We need our own clone of the rendering order cache for `self.select`
+        self.rendered_order.clone_from(&state.user_render_order);
 
         let selected_user_id = match &state.message_context {
             Some(MessageContext::User(id)) => Some(id),
