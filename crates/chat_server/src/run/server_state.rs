@@ -1,7 +1,7 @@
-use dashmap::{DashMap, DashSet};
 use network_protocol::{
     ChannelId, ChannelInfo, ErrorEvent, ErrorKind, NetworkEvent, UpdateInfo, UserId, UserInfo,
 };
+use scc::{HashMap, HashSet};
 use tokio::sync::{broadcast, mpsc};
 
 use thiserror::Error;
@@ -115,26 +115,29 @@ pub struct ServerState {
     global_broadcast: broadcast::Sender<NetworkEvent>,
 
     /// Map from channel IDs to channels.
-    channels: DashMap<ChannelId, Channel>,
+    channels: HashMap<ChannelId, Channel>,
 
     /// Map from user IDs to users.
-    users: DashMap<UserId, User>,
+    users: HashMap<UserId, User>,
 
     /// Set of all connected users' names. Used for fast, atomic lookups to enforce username
     /// uniqueness.
-    taken_names: DashSet<String>,
+    taken_names: HashSet<String>,
 }
 
 impl ServerState {
     /// Initialize a `ServerState` instance.
     pub fn new(default_channel_id: Option<ChannelId>, max_username_length: usize) -> Self {
+        const CHANNEL_INIT_CAPACITY: usize = 64;
+        const USER_INIT_CAPACITY: usize = 4096;
+
         Self {
             default_channel_id,
             max_username_length,
             global_broadcast: broadcast::channel(128).0, // TODO: Buffer size
-            channels: DashMap::new(),
-            users: DashMap::new(),
-            taken_names: DashSet::new(),
+            channels: HashMap::with_capacity(CHANNEL_INIT_CAPACITY),
+            users: HashMap::with_capacity(USER_INIT_CAPACITY),
+            taken_names: HashSet::with_capacity(USER_INIT_CAPACITY),
         }
     }
 
@@ -164,17 +167,25 @@ impl ServerState {
     /// Get a channel's [`ChannelInfo`] by its ID, if the ID is associated with a channel on the
     /// server.
     #[expect(dead_code)]
-    pub fn get_channel_info(&self, id: ChannelId) -> Option<ChannelInfo> {
-        self.channels.get(&id).map(|channel| channel.info.clone())
+    pub async fn get_channel_info(&self, id: ChannelId) -> Option<ChannelInfo> {
+        self.channels
+            .read_async(&id, |_, channel| channel.info.clone())
+            .await
     }
 
     /// Get the [`ChannelInfo`] of every channel on the server. If there are no channels, returns an
     /// empty [`Vec`].
-    pub fn get_all_channel_info(&self) -> Vec<ChannelInfo> {
+    pub async fn get_all_channel_info(&self) -> Vec<ChannelInfo> {
+        let mut res = Vec::with_capacity(self.channels.len());
+
         self.channels
-            .iter()
-            .map(|entry| entry.info.clone())
-            .collect()
+            .iter_async(|_, value| {
+                res.push(value.info.clone());
+                true
+            })
+            .await;
+
+        res
     }
 
     /// Send a [`NetworkEvent`] to a channel with the given ID, if that ID is associated with a
@@ -182,20 +193,19 @@ impl ServerState {
     ///
     /// # Errors
     /// Returns [`ChannelError::DoesNotExist`] if the target channel ID was not found.
-    pub fn send_event_to_channel(
+    pub async fn send_event_to_channel(
         &self,
         target_id: ChannelId,
         event: NetworkEvent,
     ) -> Result<(), ChannelError> {
-        let Some(channel) = self.channels.get(&target_id) else {
-            return Err(ChannelError::DoesNotExist(target_id));
-        };
-
         // The only failure condition for sending through a broadcast channel is if there are no
         // receivers, but we don't actually care if nobody gets this message. As such, we ignore
-        // this error.
-        let _: Result<_, _> = channel.broadcast.send(event);
-        Ok(())
+        // the Result.
+        self.channels
+            .read_async(&target_id, |_, value| value.broadcast.send(event))
+            .await
+            .map(|_ignored_result| ())
+            .ok_or(ChannelError::DoesNotExist(target_id))
     }
 
     /// Add a new channel to the server.
@@ -205,7 +215,7 @@ impl ServerState {
     ///
     /// # Errors
     /// Returns [`ChannelError`] if a called with an ID that is already present.
-    pub fn add_channel(
+    pub async fn add_channel(
         &self,
         id: ChannelId,
         name: String,
@@ -218,33 +228,48 @@ impl ServerState {
             broadcast: event_tx,
         };
 
-        if let dashmap::Entry::Vacant(entry) = self.channels.entry(id) {
-            entry.insert(channel);
-            Ok(())
-        } else {
-            Err(ChannelError::AlreadyExists(id))
-        }
+        self.channels
+            .insert_async(id, channel)
+            .await
+            .map_err(|_| ChannelError::AlreadyExists(id))
     }
 
     /// Subscribe to all channels on the server. Returns a [`Vec`] of [`broadcast::Receiver`]s for
     /// every channel.
-    pub fn subscribe_to_channels(&self) -> Vec<broadcast::Receiver<NetworkEvent>> {
+    pub async fn subscribe_to_channels(&self) -> Vec<broadcast::Receiver<NetworkEvent>> {
+        let mut res = Vec::with_capacity(self.channels.len());
+
         self.channels
-            .iter()
-            .map(|pair| pair.value().broadcast.subscribe())
-            .collect()
+            .iter_async(|_, value| {
+                res.push(value.broadcast.subscribe());
+                true
+            })
+            .await;
+
+        res
     }
 
     /// Get a user's [`UserInfo`] by their ID, if the ID is associated with a user on the server.
     #[expect(dead_code)]
-    pub fn get_user_info(&self, id: UserId) -> Option<UserInfo> {
-        self.users.get(&id).map(|user| user.info.clone())
+    pub async fn get_user_info(&self, id: UserId) -> Option<UserInfo> {
+        self.users
+            .read_async(&id, |_, value| value.info.clone())
+            .await
     }
 
     /// Get the [`UserInfo`] of every user on the server. If there are no users, returns an empty
     /// [`Vec`].
-    pub fn get_all_user_info(&self) -> Vec<UserInfo> {
-        self.users.iter().map(|entry| entry.info.clone()).collect()
+    pub async fn get_all_user_info(&self) -> Vec<UserInfo> {
+        let mut res = Vec::with_capacity(self.users.len());
+
+        self.users
+            .iter_async(|_, value| {
+                res.push(value.info.clone());
+                true
+            })
+            .await;
+
+        res
     }
 
     /// Send a [`NetworkEvent`] to a client with the given ID, if that ID is associated with a user
@@ -257,15 +282,15 @@ impl ServerState {
         target_id: UserId,
         event: NetworkEvent,
     ) -> Result<(), UserError> {
-        // We have to do it this way to avoid holding the lock over the `await` point, which could
-        // deadlock.
-        let sender = {
-            let Some(user) = self.users.get(&target_id) else {
-                return Err(UserError::TargetNotFound(target_id));
-            };
-            user.sender.clone()
-        };
+        let sender = self
+            .users
+            .read_async(&target_id, |_, value| value.sender.clone())
+            .await
+            .ok_or(UserError::TargetNotFound(target_id))?;
 
+        // The only failure condition for sending through this channel is if the channel is closed,
+        // but that can only happen if the target user disconnected, which we don't really care
+        // about. As such, we ignore this Result.
         let _: Result<_, _> = sender.send(event).await;
         Ok(())
     }
@@ -278,7 +303,7 @@ impl ServerState {
     ///
     /// # Errors
     /// Returns a [`NameRegistrationError`] if name registration fails.
-    pub fn handle_new_user(
+    pub async fn handle_new_user(
         &self,
         name: String,
         max_username_length: usize,
@@ -289,7 +314,12 @@ impl ServerState {
         Self::validate_username(name, max_username_length)?;
         let normalized_name = Self::normalize_username(name);
 
-        if !self.taken_names.insert(normalized_name) {
+        if self
+            .taken_names
+            .insert_async(normalized_name)
+            .await
+            .is_err()
+        {
             return Err(UserError::Name(UserNameError::AlreadyTaken(
                 name.to_owned(),
             )));
@@ -307,7 +337,9 @@ impl ServerState {
             sender: event_tx,
         };
 
-        self.users.insert(user_id, user);
+        self.users.insert_async(user_id, user).await.expect(
+            "This error would indicate a UUID collision, which we can assume to be impossible",
+        );
 
         self.send_global_event(NetworkEvent::UserJoined(user_info));
 
@@ -317,7 +349,7 @@ impl ServerState {
     /// Update a user's information with the given [`UpdateInfo`]. `Some` fields will be updated,
     /// while `None` fields will be unmodified. The update operation is atomic - if any updates fail
     /// (for example, if a username is invalid), the entire update will fail.
-    pub fn update_user_info(
+    pub async fn update_user_info(
         &self,
         token: &UserToken,
         new_info: UpdateInfo,
@@ -328,7 +360,7 @@ impl ServerState {
         /// we touch persistent state between checkpoints. This patches that hole.
         #[derive(Debug)]
         struct DropGuard<'a> {
-            taken_names: &'a DashSet<String>,
+            taken_names: &'a HashSet<String>,
             added_name: Option<String>,
             committed: bool,
         }
@@ -340,9 +372,17 @@ impl ServerState {
                 }
 
                 if let Some(added) = self.added_name.take() {
-                    self.taken_names.remove(&added);
+                    self.taken_names
+                        .remove_sync(&added)
+                        .expect("If Some(added), we definitely already added the name to the set, so it will still be there");
                 }
             }
+        }
+
+        // Before anything else, if the entire `UpdateInfo` is all None, this whole function is a
+        // NOP. We check that first.
+        if matches!(new_info, UpdateInfo { name: None }) {
+            return Ok(());
         }
 
         let mut drop_guard = DropGuard {
@@ -351,8 +391,10 @@ impl ServerState {
             committed: false,
         };
 
-        let Some(mut proposed_user_info) =
-            self.users.get(&token.id()).map(|inner| inner.info.clone())
+        let Some(mut proposed_user_info) = self
+            .users
+            .read_async(&token.id(), |_, value| value.info.clone())
+            .await
         else {
             return Err(UserError::YourIdNotFound);
         };
@@ -374,13 +416,19 @@ impl ServerState {
             // inconsequential representation stuff. As such, if the normalized representations are
             // identical, we can skip all set updates.
             if normalized_new_name != normalized_old_name {
-                if !self.taken_names.insert(normalized_new_name.clone()) {
+                if self
+                    .taken_names
+                    .insert_async(normalized_new_name.clone())
+                    .await
+                    .is_err()
+                {
                     // Nothing changes here - we're abandoning the operation - so we don't want to
                     // mutate the set, just return.
                     return Err(UserError::Name(UserNameError::AlreadyTaken(
                         new_name.to_owned(),
                     )));
                 }
+
                 drop_guard.added_name = Some(normalized_new_name);
 
                 // We defer removal until we know the entire transaction succeded
@@ -390,8 +438,15 @@ impl ServerState {
             new_name.clone_into(&mut proposed_user_info.name);
         }
 
-        if let Some(mut user_entry) = self.users.get_mut(&token.id()) {
-            user_entry.info = proposed_user_info.clone();
+        let updated = self
+            .users
+            .update_async(&token.id(), |_, user_entry| {
+                user_entry.info = proposed_user_info.clone();
+            })
+            .await
+            .is_some();
+
+        if updated {
             drop_guard.committed = true;
 
             // We have to do this here, not earlier, to avoid the following race condition:
@@ -402,7 +457,9 @@ impl ServerState {
             // This would allow 2 users to have the same name. Therefore, we must be sure the
             // transaction succeeded before removing the old name.
             if let Some(name) = old_name_to_remove {
-                self.taken_names.remove(&name);
+                // `None` is an edge case that should never happen, but we don't really care if it
+                // somehow does.
+                let _: Option<_> = self.taken_names.remove_async(&name).await;
             }
 
             self.send_global_event(NetworkEvent::UserInfoUpdated(proposed_user_info));
@@ -413,13 +470,14 @@ impl ServerState {
     }
 
     /// Remove a user with the given ID from the server, if the ID is present.
-    pub fn remove_user(&self, token: UserToken) -> Result<(), UserError> {
-        let Some((_, user)) = self.users.remove(&token.id()) else {
+    pub async fn remove_user(&self, token: UserToken) -> Result<(), UserError> {
+        let Some((_, user)) = self.users.remove_async(&token.id()).await else {
             return Err(UserError::YourIdNotFound);
         };
 
         let normalized_name = Self::normalize_username(&user.info.name);
-        self.taken_names.remove(&normalized_name);
+        // We don't care about this state inconsistency since we're disconnecting anyways.
+        let _: Option<_> = self.taken_names.remove_async(&normalized_name).await;
 
         Ok(())
     }

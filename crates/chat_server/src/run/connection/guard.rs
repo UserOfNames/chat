@@ -39,15 +39,16 @@ impl Drop for ConnectionGuard {
             .expect("Token is always present while running");
 
         let id = token.id();
+        let server_state = self.server_state.clone();
 
-        match self.server_state.remove_user(token) {
-            Err(UserError::YourIdNotFound) => {
-                warn!(%id, "State mismatch detected while disconnecting: ID not found");
+        tokio::spawn(async move {
+            match server_state.remove_user(token).await {
+                Err(UserError::YourIdNotFound) => {
+                    warn!(%id, "State mismatch detected while disconnecting: ID not found");
+                }
+
+                _ => server_state.send_global_event(NetworkEvent::UserLeft(id)),
             }
-
-            _ => self
-                .server_state
-                .send_global_event(NetworkEvent::UserLeft(id)),
-        }
+        });
     }
 }
