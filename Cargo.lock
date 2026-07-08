@@ -276,13 +276,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
- "dashmap",
  "directories",
  "figment",
  "futures",
  "network_protocol",
  "rcgen",
  "rustls",
+ "scc",
  "serde",
  "shared_utils",
  "tempfile",
@@ -480,20 +480,6 @@ dependencies = [
  "darling_core",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "dashmap"
-version = "6.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6361d5c062261c78a176addb82d4c821ae42bed6089de0e12603cd25de2059c"
-dependencies = [
- "cfg-if",
- "crossbeam-utils",
- "hashbrown 0.14.5",
- "lock_api",
- "once_cell",
- "parking_lot_core",
 ]
 
 [[package]]
@@ -863,12 +849,6 @@ dependencies = [
  "wasip2",
  "wasip3",
 ]
-
-[[package]]
-name = "hashbrown"
-version = "0.14.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "hashbrown"
@@ -1856,10 +1836,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
+name = "saa"
+version = "5.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68f5acb362a0e75c2a963532fa7fabf13dff81626dc494df16488d30befcbea0"
+
+[[package]]
+name = "scc"
+version = "3.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7800bc2c7e91b26aeae70c2ab6eaa653efc133104b7756e674c99304adff3fdb"
+dependencies = [
+ "saa",
+ "sdd",
+]
+
+[[package]]
 name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "sdd"
+version = "4.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1836bad8bdc9c6d665b63202da3d9c6d60ed1e597cae63620e21ebf89a3595a9"
+dependencies = [
+ "saa",
+]
 
 [[package]]
 name = "semver"

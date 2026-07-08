@@ -15,13 +15,13 @@ needless_continue = "allow"
 anyhow = "1"
 bytes = "1"
 clap = { version = "4", features = ["derive"] }
-dashmap = "6"
 directories = "6"
 figment = { version = "0.10", features = ["env", "toml"] }
 futures = "0.3"
 prost = "0.14"
 rcgen = { version = "0.14", features = ["x509-parser"] }
 rustls = "0.23"
+scc = "3"
 serde = { version = "1", features = ["derive"] }
 tempfile = "3.2.7"
 thiserror = "2"

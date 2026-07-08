@@ -101,6 +101,7 @@ impl Connection {
         // Subscribe to all the server's channels
         let channels: select_all::SelectAll<_> = server_state
             .subscribe_to_channels()
+            .await
             .into_iter()
             .map(BroadcastStream::from)
             .collect();
@@ -151,11 +152,15 @@ impl Connection {
 
         let (event_tx, event_rx) = mpsc::channel::<NetworkEvent>(128); // TODO: Buffer size
 
-        let user_token = match server_state.handle_new_user(
-            hello.requested_name,
-            server_state.max_username_length(),
-            event_tx,
-        ) {
+        let new_user_result = server_state
+            .handle_new_user(
+                hello.requested_name,
+                server_state.max_username_length(),
+                event_tx,
+            )
+            .await;
+
+        let user_token = match new_user_result {
             Ok(token) => token,
             Err(e) => return Err(anyhow::anyhow!(e)),
         };
@@ -274,7 +279,7 @@ impl Connection {
             NetworkCommand::FetchChannels(_fetch) => {
                 debug!("Client requested channel sync");
                 self.send_event_to_client(NetworkEvent::ChannelSync(ChannelSync {
-                    channels: self.server_state.get_all_channel_info(),
+                    channels: self.server_state.get_all_channel_info().await,
                 }))
                 .await?;
             }
@@ -282,7 +287,7 @@ impl Connection {
             NetworkCommand::FetchUsers(_fetch) => {
                 debug!("Client requested user sync");
                 self.send_event_to_client(NetworkEvent::UserSync(UserSync {
-                    users: self.server_state.get_all_user_info(),
+                    users: self.server_state.get_all_user_info().await,
                 }))
                 .await?;
             }
@@ -317,7 +322,11 @@ impl Connection {
                     destination: ReceiveDestination::Channel(channel_id),
                 });
 
-                if let Err(e) = self.server_state.send_event_to_channel(channel_id, event) {
+                if let Err(e) = self
+                    .server_state
+                    .send_event_to_channel(channel_id, event)
+                    .await
+                {
                     warn!(error = %e, "Failed to send message to target channel");
                 }
             }
@@ -355,11 +364,16 @@ impl Connection {
         new_username = ?new_info.name,
     ))]
     async fn update_info(&mut self, new_info: UpdateInfo) -> anyhow::Result<()> {
-        if let Err(e) = self.server_state.update_user_info(
-            self.guard.token(),
-            new_info,
-            self.server_state.max_username_length(),
-        ) {
+        let update_result = self
+            .server_state
+            .update_user_info(
+                self.guard.token(),
+                new_info,
+                self.server_state.max_username_length(),
+            )
+            .await;
+
+        if let Err(e) = update_result {
             warn!(error = %e, "Failed to update user info");
 
             self.send_event_to_client(NetworkEvent::ErrorEvent(e.into()))

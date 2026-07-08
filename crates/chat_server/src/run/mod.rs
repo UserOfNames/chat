@@ -135,7 +135,9 @@ struct ChatServer {
 
 impl ChatServer {
     #[instrument(skip_all, err)]
-    fn new(config: Config) -> anyhow::Result<Self> {
+    // TODO: `async fn new` is an antipattern. This whole function is getting bloated in general;
+    // refactor the whole thing (and make it synchronous).
+    async fn new(config: Config) -> anyhow::Result<Self> {
         let bind_address = SocketAddr::new(config.listener_ip, config.listener_port);
         debug!(ip = %config.listener_ip, port = %config.listener_port, "Resolved bind address");
 
@@ -185,7 +187,10 @@ impl ChatServer {
                 "Registering channel"
             );
 
-            if let Err(e) = server_state.add_channel(channel_info.id, channel_info.name, tx) {
+            if let Err(e) = server_state
+                .add_channel(channel_info.id, channel_info.name, tx)
+                .await
+            {
                 bail!("Failed to initialize channels - {e}");
             }
         }
@@ -269,6 +274,7 @@ pub async fn main(default_paths: Option<DefaultPaths>, args: RunArgs) -> anyhow:
 
     info!("Starting server");
     ChatServer::new(config)
+        .await
         .context("Initializing server")?
         .run()
         .await
