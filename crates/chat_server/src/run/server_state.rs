@@ -163,6 +163,7 @@ impl ServerState {
 
     /// Get a channel's [`ChannelInfo`] by its ID, if the ID is associated with a channel on the
     /// server.
+    #[expect(dead_code)]
     pub fn get_channel_info(&self, id: ChannelId) -> Option<ChannelInfo> {
         self.channels.get(&id).map(|channel| channel.info.clone())
     }
@@ -235,6 +236,7 @@ impl ServerState {
     }
 
     /// Get a user's [`UserInfo`] by their ID, if the ID is associated with a user on the server.
+    #[expect(dead_code)]
     pub fn get_user_info(&self, id: UserId) -> Option<UserInfo> {
         self.users.get(&id).map(|user| user.info.clone())
     }
@@ -328,7 +330,6 @@ impl ServerState {
         struct DropGuard<'a> {
             taken_names: &'a DashSet<String>,
             added_name: Option<String>,
-            removed_name: Option<String>,
             committed: bool,
         }
 
@@ -341,17 +342,12 @@ impl ServerState {
                 if let Some(added) = self.added_name.take() {
                     self.taken_names.remove(&added);
                 }
-
-                if let Some(removed) = self.removed_name.take() {
-                    self.taken_names.insert(removed);
-                }
             }
         }
 
         let mut drop_guard = DropGuard {
             taken_names: &self.taken_names,
             added_name: None,
-            removed_name: None,
             committed: false,
         };
 
@@ -360,6 +356,9 @@ impl ServerState {
         else {
             return Err(UserError::YourIdNotFound);
         };
+
+        // Name to remove from `taken_names` if we update the user's name
+        let mut old_name_to_remove: Option<String> = None;
 
         if let Some(new_name) = new_info.name {
             let new_name = new_name.trim();
@@ -384,8 +383,8 @@ impl ServerState {
                 }
                 drop_guard.added_name = Some(normalized_new_name);
 
-                self.taken_names.remove(&normalized_old_name);
-                drop_guard.removed_name = Some(normalized_old_name);
+                // We defer removal until we know the entire transaction succeded
+                old_name_to_remove = Some(normalized_old_name);
             }
 
             new_name.clone_into(&mut proposed_user_info.name);
@@ -394,6 +393,18 @@ impl ServerState {
         if let Some(mut user_entry) = self.users.get_mut(&token.id()) {
             user_entry.info = proposed_user_info.clone();
             drop_guard.committed = true;
+
+            // We have to do this here, not earlier, to avoid the following race condition:
+            // 1. Bob asks to change his name to Bob1234, removes "bob" from `taken_names`, and gets
+            //    preempted.
+            // 2. Bob4321 asks to change his name to Bob. It succeeds.
+            // 3. Bob (original)'s state change fails.
+            // This would allow 2 users to have the same name. Therefore, we must be sure the
+            // transaction succeeded before removing the old name.
+            if let Some(name) = old_name_to_remove {
+                self.taken_names.remove(&name);
+            }
+
             self.send_global_event(NetworkEvent::UserInfoUpdated(proposed_user_info));
             Ok(())
         } else {
