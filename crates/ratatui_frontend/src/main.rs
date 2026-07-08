@@ -8,7 +8,7 @@ use chat_backend::{
     ChatBackend,
     client_command::ClientCommand,
     client_event::{self, ClientEvent},
-    network_protocol::{NetworkCommand, SendDestination, SendMessage},
+    network_protocol::{ErrorEvent, NetworkCommand, SendDestination, SendMessage},
 };
 use clap::Parser;
 use crossterm::event::{Event, EventStream, KeyEvent, KeyEventKind};
@@ -157,9 +157,9 @@ impl App {
 
                 event = self.backend_receiver.recv() => {
                     match event {
-                        Some(Ok(evt)) => self.handle_client_event(evt).await,
+                        Some(Ok(evt)) => self.handle_client_event(evt),
 
-                        Some(Err(e)) => self.handle_client_event_error(e).await,
+                        Some(Err(e)) => self.handle_client_event_error(e),
 
                         // The self.is_quitting flag is only set if the user explicitly requested
                         // to exit; otherwise, the backend closing was unexpected.
@@ -205,7 +205,7 @@ impl App {
 
     /// Handle a `ClientEvent` coming from the backend.
     #[instrument(skip_all, fields(event = %event.name()))]
-    async fn handle_client_event(&mut self, event: ClientEvent) {
+    fn handle_client_event(&mut self, event: ClientEvent) {
         debug!("UI received event from backend");
 
         match event {
@@ -216,17 +216,17 @@ impl App {
 
             ClientEvent::Disconnected => {
                 info!("Disconnected from server, dropping UI state");
-                self.notify("Disconnected".to_owned(), NoticeLevel::Notification)
-                    .await;
+                self.notify("Disconnected".to_owned(), NoticeLevel::Notification);
                 self.connection_state = None;
             }
 
             ClientEvent::ServerShutDown => {
                 warn!("Server shut down while connected, dropping UI state");
-                self.notify("The server shut down.".to_owned(), NoticeLevel::Warning)
-                    .await;
+                self.notify("The server shut down.".to_owned(), NoticeLevel::Warning);
                 self.connection_state = None;
             }
+
+            ClientEvent::ErrorEvent(error_event) => self.handle_error_event(error_event),
 
             // Remaining events should all be auto-routable to the ConnectionState instance. If not,
             // we failed to handle a special case in this match statement. If there is no
@@ -239,12 +239,17 @@ impl App {
         }
     }
 
+    /// Handle an [`ErrorEvent`](chat_backend::network_protocol::ErrorEvent).
+    fn handle_error_event(&mut self, error_event: ErrorEvent) {
+        self.notify(error_event.to_string(), NoticeLevel::Error);
+    }
+
     /// Handle a `client_event::Error` coming from the backend.
     #[instrument(skip(self))]
-    async fn handle_client_event_error(&mut self, error: client_event::Error) {
+    fn handle_client_event_error(&mut self, error: client_event::Error) {
         warn!("Received error from client backend. Assuming the connection is dead.");
         let message = error.to_string();
-        self.notify(message, NoticeLevel::Error).await;
+        self.notify(message, NoticeLevel::Error);
 
         // If we received an error, we can assume the connection is dead.
         self.connection_state = None;
@@ -297,8 +302,7 @@ impl App {
                     self.notify(
                         "Cannot send message: not connected to a server".to_owned(),
                         NoticeLevel::Error,
-                    )
-                    .await;
+                    );
                     return;
                 };
 
@@ -309,8 +313,7 @@ impl App {
                         self.notify(
                             "Cannot send message: no user or channel is selected.".to_owned(),
                             NoticeLevel::Error,
-                        )
-                        .await;
+                        );
                         return;
                     }
                 };
@@ -359,7 +362,7 @@ impl App {
     }
 
     /// Create a notification, warning, or error popup.
-    async fn notify(&mut self, message: String, level: NoticeLevel) {
+    fn notify(&mut self, message: String, level: NoticeLevel) {
         let notice = NoticePopup::create(message, level);
         self.popups.push(notice);
     }
