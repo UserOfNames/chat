@@ -1,4 +1,4 @@
-use chat_backend::client_event::ReceivedMessage;
+use chat_backend::{client_event::ReceivedMessage, network_protocol::UserId};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use crate::connection_state::{MessageContext, ConnectionState};
+use crate::connection_state::{ConnectionState, MessageContext};
 
 #[derive(Debug)]
 pub struct Messages {
@@ -52,10 +52,24 @@ impl Messages {
             && let Some(context) = &state.message_context
             && let Some(messages) = state.messages.get(context)
         {
-            let items: Vec<ListItem> = messages
-                .iter()
-                .map(|msg| self.build_message_item(msg, state, inner_area.width))
-                .collect();
+            let mut items: Vec<ListItem> = Vec::with_capacity(messages.len());
+            let mut previous_sender: Option<UserId> = None;
+            let mut is_first = true;
+
+            for message in messages {
+                let is_continuation = previous_sender == Some(message.sender_id);
+
+                items.push(self.build_message_item(
+                    message,
+                    state,
+                    inner_area.width,
+                    is_continuation,
+                    is_first,
+                ));
+
+                previous_sender = Some(message.sender_id);
+                is_first = false;
+            }
 
             let list = List::new(items).highlight_style(Style::new().reversed());
             StatefulWidget::render(list, inner_area, buf, &mut self.list_state);
@@ -67,30 +81,39 @@ impl Messages {
         message: &'a ReceivedMessage,
         state: &'a ConnectionState,
         max_width: u16,
+        is_continuation: bool,
+        is_first: bool,
     ) -> ListItem<'a> {
-        let header_style = if message.sender_id == state.your_id {
-            Style::new().green()
-        } else {
-            Style::new().blue()
-        };
+        let mut lines = Vec::with_capacity(8);
 
-        let sender_name = state
-            .get_user_name(message.sender_id)
-            .unwrap_or("Unknown user");
+        // Message coalescence: skip the header if the sender didn't change
+        if !is_continuation {
+            // Add spacing between message clusters unless it's the first message
+            if !is_first {
+                lines.push(Line::raw(""));
+            }
 
-        let header = Line::styled(sender_name, header_style);
+            // Specially color the user's header
+            let header_style = if message.sender_id == state.your_id {
+                Style::new().green()
+            } else {
+                Style::new().blue()
+            };
 
-        // TODO: Cache line wrapping? It's expensive logic to run every rendering tick.
-        let wrapped_contents: Vec<Line> = textwrap::wrap(&message.contents, max_width as usize)
-            .into_iter()
-            .map(Line::from)
-            .collect();
+            let sender_name = state
+                .get_user_name(message.sender_id)
+                .unwrap_or("Unknown user");
 
-        let content: Vec<_> = std::iter::once(header)
-            .chain(wrapped_contents)
-            .chain(std::iter::once(Line::raw(""))) // Add a line between each message
-            .collect();
+            lines.push(Line::styled(sender_name, header_style));
+        }
 
-        ListItem::new(Text::from(content))
+        lines.extend(
+            // TODO: Cache line wrapping? It's expensive logic to run every rendering tick.
+            textwrap::wrap(&message.contents, max_width as usize)
+                .into_iter()
+                .map(Line::from),
+        );
+
+        ListItem::new(Text::from(lines))
     }
 }
