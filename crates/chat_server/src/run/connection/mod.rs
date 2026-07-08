@@ -150,6 +150,8 @@ impl Connection {
         };
         debug!(?hello, "Received client hello");
 
+        let default_channel_id = server_state.default_channel_id();
+
         let (event_tx, event_rx) = mpsc::channel::<NetworkEvent>(128); // TODO: Buffer size
 
         let new_user_result = server_state
@@ -169,13 +171,13 @@ impl Connection {
         // It's important that we create the guard before any more fallible operations, since
         // `handle_new_user` touched persistent state.
         #[allow(clippy::used_underscore_binding)]
-        let guard = ConnectionGuard::new(user_token, server_state.clone());
+        let guard = ConnectionGuard::new(user_token, server_state);
 
         // Send Hello to the client.
         if let Err(e) = client_stream
             .send(NetworkEvent::ServerHello(ServerHello {
                 your_id: guard.id(),
-                default_channel_id: server_state.default_channel_id(),
+                default_channel_id,
             }))
             .await
         {
