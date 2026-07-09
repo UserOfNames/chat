@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use chat_backend::{client_event::ReceivedMessage, network_protocol::UserId};
 use ratatui::{
     buffer::Buffer,
@@ -29,7 +31,7 @@ impl Messages {
                     .get_channel_name(*id)
                     .unwrap_or("Unknown");
 
-                format!(" Channel: {name} ")
+                Cow::Owned(format!(" Channel: {name} "))
             }
 
             Some(MessageContext::User(id)) => {
@@ -38,10 +40,10 @@ impl Messages {
                     .get_user_name(*id)
                     .unwrap_or("Unknown");
 
-                format!(" User: {name} ")
+                Cow::Owned(format!(" User: {name} "))
             }
 
-            None => " Messages ".to_owned(),
+            None => Cow::Borrowed(" Messages "),
         };
 
         let block = Block::bordered().title(title);
