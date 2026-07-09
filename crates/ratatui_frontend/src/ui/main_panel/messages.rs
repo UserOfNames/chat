@@ -108,7 +108,9 @@ impl Messages {
         }
 
         lines.extend(
-            // TODO: Cache line wrapping? It's expensive logic to run every rendering tick.
+            // TODO: Cache line wrapping, as this is an expensive operation to do every tick.
+            // However, this is dependent on unresolved data modeling questions, so it must be done
+            // later.
             textwrap::wrap(&message.contents, max_width as usize)
                 .into_iter()
                 .map(Line::from),
