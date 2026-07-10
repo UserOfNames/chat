@@ -35,7 +35,10 @@ use connection::Connection;
 use network_protocol::{
     ClientHello, FetchChannels, FetchUsers, NetworkCommand, NetworkEvent, ServerHello,
 };
-use shared_utils::{NamedProjectDirs, TildeRelativePathBuf, first_match};
+use shared_utils::{
+    files::{NamedProjectDirs, TildeRelativePathBuf},
+    first_match,
+};
 use tracing::{debug, error, info, instrument, warn};
 
 const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");

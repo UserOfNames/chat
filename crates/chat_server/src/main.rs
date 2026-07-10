@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use init::InitMode;
 use run::RunArgs;
-use shared_utils::NamedProjectDirs;
+use shared_utils::files::NamedProjectDirs;
 
 const ENV_VAR_PREFIX: &str = "MY_CHAT_";
 const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");

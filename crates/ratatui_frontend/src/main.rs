@@ -19,7 +19,7 @@ use figment::{
 use futures::StreamExt;
 use ratatui::{DefaultTerminal, Frame, widgets::Clear};
 use serde::{Deserialize, Serialize};
-use shared_utils::{NamedProjectDirs, first_match};
+use shared_utils::{files::NamedProjectDirs, first_match};
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::{Duration, interval},
