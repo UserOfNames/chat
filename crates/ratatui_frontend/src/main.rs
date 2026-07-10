@@ -11,7 +11,7 @@ use chat_backend::{
     network_protocol::{ErrorEvent, NetworkCommand, SendDestination, SendMessage},
 };
 use clap::Parser;
-use crossterm::event::{Event, EventStream, KeyEvent, KeyEventKind};
+use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
 use figment::{
     Figment,
     providers::{Format, Serialized, Toml},
@@ -154,8 +154,6 @@ impl App {
             }
 
             tokio::select! {
-                // TODO: In the input handling loop, check for double quit and force break.
-
                 _ = render_interval.tick() => {}
 
                 event = self.backend_receiver.recv() => {
@@ -181,6 +179,18 @@ impl App {
 
                 event = self.event_stream.next() => {
                     match event {
+                        Some(Ok(evt)) if self.is_quitting => {
+                            if let Event::Key(k) = evt
+                                && k.kind == KeyEventKind::Press
+                                && k.code == KeyCode::Char('q')
+                            {
+                                warn!("User initiated a forced exit");
+                                return Ok(());
+                            }
+
+                            debug!("Ignoring terminal event because application is quitting");
+                        }
+
                         Some(Ok(evt)) => self.handle_terminal_event(evt).await,
 
                         Some(Err(e)) => {
@@ -389,9 +399,16 @@ impl App {
     async fn send_to_backend(&mut self, command: ClientCommand) {
         debug!("Sending command to backend");
 
-        // If this fails, the backend is already closed, and the next select! loop will detect
-        // that. As such, we don't care about the Result here.
-        let _: Result<_, _> = self.backend_sender.send(command).await;
+        // We report if the channel is full for too long instead of waiting indefinitely to avoid
+        // hard-stalling the UI.
+        let command_name = command.name();
+        if let Err(e) = self.backend_sender.try_send(command) {
+            warn!(error = %e, command = %command_name, "Failed to send command to backend (might be dead)");
+            self.notify(
+                format!("Sending command '{command_name}' failed, backend may be slow or dead"),
+                NoticeLevel::Warning,
+            );
+        }
     }
 }
 
