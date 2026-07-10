@@ -6,6 +6,7 @@ use ratatui::{
     widgets::{Block, Widget},
 };
 use ratatui_textarea::TextArea;
+use shared_utils::strings::StringExt;
 
 use super::{Action, KeyHandler, Popup, SizeHint, SizeKind};
 
@@ -30,7 +31,7 @@ impl KeyHandler for UpdateInfoPopup {
             KeyCode::Esc => Action::PopPopup,
 
             KeyCode::Enter => {
-                let name = self.username_input.lines().join("").trim().to_owned();
+                let name = self.username_input.lines().join("").into_fast_trim();
                 let name = if name.is_empty() { None } else { Some(name) };
 
                 let update_info = UpdateInfo { name };

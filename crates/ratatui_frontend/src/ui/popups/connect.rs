@@ -8,6 +8,7 @@ use ratatui::{
     widgets::{Block, Borders, Widget},
 };
 use ratatui_textarea::TextArea;
+use shared_utils::strings::StringExt;
 
 use super::{
     Action, KeyHandler, Popup, SizeHint, SizeKind,
@@ -124,26 +125,20 @@ impl KeyHandler for ConnectPopup {
             }
 
             KeyCode::Enter => {
-                // TODO: fast trim?
                 let username = self.inputs[Focus::Username as usize]
                     .lines()
                     .join("")
-                    .trim()
-                    .to_owned();
+                    .into_fast_trim();
 
-                // TODO: fast trim?
                 let host = self.inputs[Focus::Host as usize]
                     .lines()
                     .join("")
-                    .trim()
-                    .to_owned();
+                    .into_fast_trim();
 
-                // TODO: fast trim?
                 let port_raw = self.inputs[Focus::Port as usize]
                     .lines()
                     .join("")
-                    .trim()
-                    .to_owned();
+                    .into_fast_trim();
 
                 if username.is_empty() {
                     return Action::PushPopup(NoticePopup::create(
