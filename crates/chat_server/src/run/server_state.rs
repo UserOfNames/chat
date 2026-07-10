@@ -2,9 +2,9 @@ use network_protocol::{
     ChannelId, ChannelInfo, ErrorEvent, ErrorKind, NetworkEvent, UpdateInfo, UserId, UserInfo,
 };
 use scc::{HashMap, HashSet};
-use tokio::sync::{broadcast, mpsc};
-
+use shared_utils::strings::StringExt;
 use thiserror::Error;
+use tokio::sync::{broadcast, mpsc};
 
 use crate::run::{Channel, User};
 
@@ -305,14 +305,14 @@ impl ServerState {
     /// Returns a [`NameRegistrationError`] if name registration fails.
     pub async fn handle_new_user(
         &self,
-        name: String,
+        mut name: String,
         max_username_length: usize,
         event_tx: mpsc::Sender<NetworkEvent>,
     ) -> Result<UserToken, UserError> {
-        let name = name.trim();
+        name.fast_trim();
 
-        Self::validate_username(name, max_username_length)?;
-        let normalized_name = Self::normalize_username(name);
+        Self::validate_username(&name, max_username_length)?;
+        let normalized_name = Self::normalize_username(&name);
 
         if self
             .taken_names
@@ -320,17 +320,12 @@ impl ServerState {
             .await
             .is_err()
         {
-            return Err(UserError::Name(UserNameError::AlreadyTaken(
-                name.to_owned(),
-            )));
+            return Err(UserError::Name(UserNameError::AlreadyTaken(name.clone())));
         }
 
         let user_id = UserId(uuid::Uuid::now_v7());
 
-        let user_info = UserInfo {
-            id: user_id,
-            name: name.to_owned(),
-        };
+        let user_info = UserInfo { id: user_id, name };
 
         let user = User {
             info: user_info.clone(),
@@ -402,14 +397,12 @@ impl ServerState {
         // Name to remove from `taken_names` if we update the user's name
         let mut old_name_to_remove: Option<String> = None;
 
-        if let Some(new_name) = new_info.name {
-            let new_name = new_name.trim();
+        if let Some(mut new_name) = new_info.name {
+            new_name.fast_trim();
 
-            if let Err(e) = Self::validate_username(new_name, max_username_length) {
-                return Err(e.into());
-            }
+            Self::validate_username(&new_name, max_username_length)?;
 
-            let normalized_new_name = Self::normalize_username(new_name);
+            let normalized_new_name = Self::normalize_username(&new_name);
             let normalized_old_name = Self::normalize_username(&proposed_user_info.name);
 
             // We should allow users to change normalized information, since it's all
@@ -424,9 +417,7 @@ impl ServerState {
                 {
                     // Nothing changes here - we're abandoning the operation - so we don't want to
                     // mutate the set, just return.
-                    return Err(UserError::Name(UserNameError::AlreadyTaken(
-                        new_name.to_owned(),
-                    )));
+                    return Err(UserError::Name(UserNameError::AlreadyTaken(new_name)));
                 }
 
                 drop_guard.added_name = Some(normalized_new_name);

@@ -142,7 +142,7 @@ impl KeyHandler for ConnectPopup {
 
                 if username.is_empty() {
                     return Action::PushPopup(NoticePopup::create(
-                        "Must enter a username".to_owned(),
+                        "Must enter a username",
                         NoticeLevel::Error,
                     ));
                 }

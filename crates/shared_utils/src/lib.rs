@@ -1,4 +1,4 @@
-/// Helpers for directories, files, paths, etc. 
+/// Helpers for directories, files, paths, etc.
 pub mod files;
 
 /// Helper macros.

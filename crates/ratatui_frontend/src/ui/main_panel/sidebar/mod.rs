@@ -14,8 +14,8 @@ use connection_status::ConnectionStatus;
 use user_list::UserList;
 
 use crate::{
-    ui::{Action, KeyHandler},
     connection_state::ConnectionState,
+    ui::{Action, KeyHandler},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

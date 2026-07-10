@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, StatefulWidget, Widget},
 };
 
-use crate::connection_state::{MessageContext, ConnectionState};
+use crate::connection_state::{ConnectionState, MessageContext};
 
 /// Widget that displays a scrollable list of channels in the current server.
 #[derive(Debug)]

@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
@@ -18,13 +20,16 @@ pub enum NoticeLevel {
 
 #[derive(Debug)]
 pub struct NoticePopup {
-    message: String,
+    message: Cow<'static, str>,
     level: NoticeLevel,
 }
 
 impl NoticePopup {
-    pub fn create(message: String, level: NoticeLevel) -> Box<dyn Popup> {
-        Box::new(Self { message, level })
+    pub fn create(message: impl Into<Cow<'static, str>>, level: NoticeLevel) -> Box<dyn Popup> {
+        Box::new(Self {
+            message: message.into(),
+            level,
+        })
     }
 }
 
@@ -51,7 +56,7 @@ impl Popup for NoticePopup {
             .title_alignment(Alignment::Center)
             .border_style(border_style);
 
-        let text = Text::from(self.message.as_str());
+        let text = Text::from(self.message.as_ref());
 
         Paragraph::new(text)
             .block(block)

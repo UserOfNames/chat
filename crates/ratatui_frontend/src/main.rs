@@ -1,7 +1,7 @@
 mod connection_state;
 mod ui;
 
-use std::{io, path::PathBuf};
+use std::{borrow::Cow, io, path::PathBuf};
 
 use anyhow::{Context, bail};
 use chat_backend::{
@@ -236,13 +236,13 @@ impl App {
 
             ClientEvent::Disconnected => {
                 info!("Disconnected from server, dropping UI state");
-                self.notify("Disconnected".to_owned(), NoticeLevel::Notification);
+                self.notify("Disconnected", NoticeLevel::Notification);
                 self.connection_state = None;
             }
 
             ClientEvent::ServerShutDown => {
                 warn!("Server shut down while connected, dropping UI state");
-                self.notify("The server shut down.".to_owned(), NoticeLevel::Warning);
+                self.notify("The server shut down.", NoticeLevel::Warning);
                 self.connection_state = None;
             }
 
@@ -320,7 +320,7 @@ impl App {
             Action::SendMessage(message) => {
                 let Some(state) = &self.connection_state else {
                     self.notify(
-                        "Cannot send message: not connected to a server".to_owned(),
+                        "Cannot send message: not connected to a server",
                         NoticeLevel::Error,
                     );
                     return;
@@ -331,7 +331,7 @@ impl App {
                     Some(MessageContext::User(id)) => SendDestination::User(*id),
                     None => {
                         self.notify(
-                            "Cannot send message: no user or channel is selected.".to_owned(),
+                            "Cannot send message: no user or channel is selected.",
                             NoticeLevel::Error,
                         );
                         return;
@@ -382,7 +382,7 @@ impl App {
     }
 
     /// Create a notification, warning, or error popup.
-    fn notify(&mut self, message: String, level: NoticeLevel) {
+    fn notify(&mut self, message: impl Into<Cow<'static, str>>, level: NoticeLevel) {
         let notice = NoticePopup::create(message, level);
         self.popups.push(notice);
     }
