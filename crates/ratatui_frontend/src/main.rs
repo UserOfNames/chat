@@ -24,7 +24,7 @@ use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::{Duration, interval},
 };
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 use tracing_appender::{non_blocking::WorkerGuard, rolling};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -129,7 +129,7 @@ impl App {
     }
 
     /// Run the application.
-    #[instrument(skip_all, err, parent = None)]
+    #[instrument(skip_all, parent = None)]
     async fn run(mut self, terminal: &mut DefaultTerminal) -> anyhow::Result<()> {
         // The UI may need to update without any incoming network events or crossterm events, so we
         // set up a periodic tick to render it even if nothing else is happening. 250 isn't a
@@ -147,7 +147,10 @@ impl App {
                     continue 'app;
                 }
 
-                Err(e) => bail!("IO error while drawing terminal frame: {e}"),
+                Err(e) => {
+                    error!(error = %e, "IO error while drawing terminal frame");
+                    bail!("IO error while drawing terminal frame: {e}");
+                }
             }
 
             tokio::select! {
@@ -168,7 +171,11 @@ impl App {
                             return Ok(());
                         }
 
-                        None => bail!("Client backend closed unexpectedly"),
+                        None => {
+                            let message = "Client backend closed unexpectedly";
+                            error!(message);
+                            bail!(message);
+                        }
                     }
                 }
 
@@ -176,7 +183,10 @@ impl App {
                     match event {
                         Some(Ok(evt)) => self.handle_terminal_event(evt).await,
 
-                        Some(Err(e)) => bail!("IO error while listening for terminal events: {e}"),
+                        Some(Err(e)) => {
+                            error!(error = %e, "IO error while listening for terminal events");
+                            bail!("IO error while listening for terminal events: {e}");
+                        }
 
                         // We treat this as a forced close, not an error
                         None => return Ok(()),
