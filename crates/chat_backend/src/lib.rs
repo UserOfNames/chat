@@ -162,8 +162,8 @@ impl ChatBackend {
                     figment = figment.merge(Toml::file(&default_path));
                     debug!(config_path = %default_path.display(), "Default config path resolved");
                 } else {
+                    debug!(config_path = %default_path.display(), "Trying to write default config file");
                     Self::try_to_write_config_file(&default_path);
-                    debug!(config_path = %default_path.display(), "Wrote default config to disk");
                 }
             },
         };

@@ -1,7 +1,12 @@
 mod connection_state;
 mod ui;
 
-use std::{borrow::Cow, io, path::PathBuf};
+use std::{
+    borrow::Cow,
+    fs::{create_dir_all, write},
+    io,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, bail};
 use chat_backend::{
@@ -424,7 +429,7 @@ async fn main() -> anyhow::Result<()> {
         println!(
             "Config path: {}",
             default_paths
-                .expect("Could not resolve default config path")
+                .context("Could not resolve default config path")?
                 .config
                 .display()
         );
@@ -432,15 +437,28 @@ async fn main() -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // TODO: Consider how to handle writing the default config file and implement that logic.
-    let config_path = first_match! {
-        Some(path) = &args.config_file => path.clone(),
-        Some(defaults) = &default_paths => defaults.config.clone(),
-    };
+    first_match! {
+        Some(path) = &args.config_file => {
+            if !path.exists() {
+                bail!("Provided config path '{}' does not exist", path.display());
+            }
 
-    if let Some(path) = &config_path {
-        figment = figment.merge(Toml::file(path));
-    }
+            figment = figment.merge(Toml::file(path));
+            debug!(config_path = %path.display(), "Provided config path resolved");
+        },
+
+        Some(defaults) = &default_paths => {
+            let default_path = &defaults.config;
+
+            if default_path.exists() {
+                figment = figment.merge(Toml::file(default_path));
+                debug!(config_path = %default_path.display(), "Default config path resolved");
+            } else {
+                debug!(config_path = %default_path.display(), "Trying to write default config file");
+                try_to_write_config_file(default_path);
+            }
+        },
+    };
 
     if let Some(defaults) = &default_paths {
         figment = figment.merge(Serialized::default("log_dir", &defaults.log_dir));
@@ -449,7 +467,7 @@ async fn main() -> anyhow::Result<()> {
     let config: Config = figment.extract().context("Resolving config")?;
 
     let _log_file_guard = init_logging(&config);
-    info!(config_path = ?config_path, "UI config resolved");
+    info!("UI config resolved");
 
     // HACK: Config path override disabled due to complexity of implementation. The backend will not
     // be a library forever, so it isn't worth it.
@@ -475,6 +493,28 @@ async fn main() -> anyhow::Result<()> {
     backend_task.abort();
 
     app_result
+}
+
+/// Attempt to write the default config file. This is best-effort; if an error occurs, we log
+/// and swallow it.
+#[instrument(skip_all, fields(path = %path.display()))]
+fn try_to_write_config_file(path: &Path) {
+    if let Some(parent) = path.parent()
+        && let Err(e) = create_dir_all(parent)
+    {
+        warn!(
+            error = %e,
+            parent_path = %parent.display(),
+            "Could not create parent directory for default config file"
+        );
+    }
+
+    if let Err(e) = write(path, DEFAULT_CONFIG) {
+        warn!(
+            error = %e,
+            "Could not write default config file"
+        );
+    }
 }
 
 fn init_logging(config: &Config) -> Option<WorkerGuard> {
