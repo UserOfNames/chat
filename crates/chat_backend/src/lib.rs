@@ -196,8 +196,8 @@ impl ChatBackend {
 
         let tls_connector = TlsConnector::from(Arc::new(tls_config));
 
-        let (cmd_tx, cmd_rx) = mpsc::channel::<ClientCommand>(128); // TODO: Buffer size
-        let (event_tx, event_rx) = mpsc::channel::<client_event::Result>(128); // TODO: Buffer size
+        let (cmd_tx, cmd_rx) = mpsc::channel::<ClientCommand>(128);
+        let (event_tx, event_rx) = mpsc::channel::<client_event::Result>(128);
 
         let handle = BackendHandle { cmd_tx, event_rx };
 

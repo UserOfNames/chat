@@ -152,7 +152,7 @@ impl Connection {
 
         let default_channel_id = server_state.default_channel_id();
 
-        let (event_tx, event_rx) = mpsc::channel::<NetworkEvent>(128); // TODO: Buffer size
+        let (event_tx, event_rx) = mpsc::channel::<NetworkEvent>(128);
 
         let new_user_result = server_state
             .handle_new_user(

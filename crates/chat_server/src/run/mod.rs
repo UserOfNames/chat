@@ -179,7 +179,7 @@ impl ChatServer {
         ));
 
         for channel_info in config.channels {
-            let (tx, _rx) = broadcast::channel(128); // TODO: Buffer size
+            let (tx, _rx) = broadcast::channel(256);
 
             debug!(
                 channel_id = %channel_info.id,

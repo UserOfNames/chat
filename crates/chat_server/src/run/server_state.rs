@@ -134,7 +134,7 @@ impl ServerState {
         Self {
             default_channel_id,
             max_username_length,
-            global_broadcast: broadcast::channel(128).0, // TODO: Buffer size
+            global_broadcast: broadcast::channel(8192).0,
             channels: HashMap::with_capacity(CHANNEL_INIT_CAPACITY),
             users: HashMap::with_capacity(USER_INIT_CAPACITY),
             taken_names: HashSet::with_capacity(USER_INIT_CAPACITY),
