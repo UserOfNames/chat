@@ -3,13 +3,13 @@ use std::borrow::Cow;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
-    layout::{Alignment, Rect},
+    layout::{Alignment, Constraint, Rect},
     style::Style,
     text::Text,
     widgets::{Block, Paragraph, Widget, Wrap},
 };
 
-use super::{Action, KeyHandler, Popup, SizeHint, SizeKind};
+use super::{Action, KeyHandler, Popup, SizeHint};
 
 #[derive(Debug)]
 pub enum NoticeLevel {
@@ -66,6 +66,6 @@ impl Popup for NoticePopup {
     }
 
     fn hint_size(&self) -> SizeHint {
-        (SizeKind::Percentage(50), SizeKind::Percentage(30)) // TODO: Dynamic sizing
+        (Constraint::Percentage(50), Constraint::Percentage(30)) // TODO: Dynamic sizing
     }
 }

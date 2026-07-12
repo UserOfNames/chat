@@ -2,13 +2,13 @@ use chat_backend::network_protocol::UpdateInfo;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
-    layout::Rect,
+    layout::{Constraint, Rect},
     widgets::{Block, Widget},
 };
 use ratatui_textarea::TextArea;
 use shared_utils::strings::StringExt;
 
-use super::{Action, KeyHandler, Popup, SizeHint, SizeKind};
+use super::{Action, KeyHandler, Popup, SizeHint};
 
 #[derive(Debug)]
 pub struct UpdateInfoPopup {
@@ -53,6 +53,6 @@ impl Popup for UpdateInfoPopup {
     }
 
     fn hint_size(&self) -> SizeHint {
-        (SizeKind::Percentage(30), SizeKind::Exact(3))
+        (Constraint::Percentage(30), Constraint::Length(3))
     }
 }

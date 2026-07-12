@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, Paragraph, Widget, Wrap},
 };
 
-use super::{Action, KeyHandler, Popup, SizeHint, SizeKind};
+use super::{Action, KeyHandler, Popup, SizeHint};
 
 #[derive(Debug)]
 pub struct QuitPopup;
@@ -58,6 +58,6 @@ impl Popup for QuitPopup {
     }
 
     fn hint_size(&self) -> SizeHint {
-        (SizeKind::Percentage(30), SizeKind::Percentage(20))
+        (Constraint::Percentage(30), Constraint::Percentage(20))
     }
 }

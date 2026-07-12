@@ -11,7 +11,7 @@ use ratatui_textarea::TextArea;
 use shared_utils::strings::StringExt;
 
 use super::{
-    Action, KeyHandler, Popup, SizeHint, SizeKind,
+    Action, KeyHandler, Popup, SizeHint,
     notice::{NoticeLevel, NoticePopup},
 };
 
@@ -212,6 +212,6 @@ impl Popup for ConnectPopup {
     }
 
     fn hint_size(&self) -> SizeHint {
-        (SizeKind::Percentage(50), SizeKind::Exact(9))
+        (Constraint::Percentage(50), Constraint::Length(9))
     }
 }

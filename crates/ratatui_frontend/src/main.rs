@@ -40,7 +40,6 @@ use ui::{
     popups::{
         Popup,
         notice::{NoticeLevel, NoticePopup},
-        popup_area,
     },
 };
 
@@ -221,7 +220,8 @@ impl App {
 
         // Since popups are a stack, we only render the 'top' one.
         if let Some(popup) = self.popups.last() {
-            let area = popup_area(frame.area(), popup.hint_size());
+            let (x, y) = popup.hint_size();
+            let area = frame.area().centered(x, y);
 
             frame.render_widget(Clear, area);
             popup.render(area, frame.buffer_mut());

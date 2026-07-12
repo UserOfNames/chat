@@ -8,7 +8,7 @@ use ratatui::{
 };
 
 use super::{
-    Action, KeyHandler, Popup, SizeHint, SizeKind, connect::ConnectPopup, quit::QuitPopup,
+    Action, KeyHandler, Popup, SizeHint, connect::ConnectPopup, quit::QuitPopup,
     update_info::UpdateInfoPopup,
 };
 
@@ -98,6 +98,6 @@ impl Popup for CommandsPopup {
         // + 3 for borders and headers
         let height = (ROW_STRS.len() + 3) as u16;
 
-        (SizeKind::Exact(width), SizeKind::Exact(height))
+        (Constraint::Length(width), Constraint::Length(height))
     }
 }
