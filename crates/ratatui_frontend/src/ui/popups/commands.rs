@@ -94,9 +94,9 @@ impl Popup for CommandsPopup {
 
     fn hint_size(&self) -> SizeHint {
         // Extra 2 characters for the borders.
-        let width = LONGEST_KEY_STR + LONGEST_ACTION_STR + COLUMN_SPACING + 2;
+        let width = const { LONGEST_KEY_STR + LONGEST_ACTION_STR + COLUMN_SPACING + 2 };
         // + 3 for borders and headers
-        let height = (ROW_STRS.len() + 3) as u16;
+        let height = const { (ROW_STRS.len() + 3) as u16 };
 
         (Constraint::Length(width), Constraint::Length(height))
     }
