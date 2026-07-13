@@ -113,8 +113,6 @@ impl KeyHandler for MainPanel {
 
                 KeyCode::Esc => Action::PushPopup(CommandsPopup::create()),
 
-                KeyCode::Backspace => panic!("DEBUG remove this key"),
-
                 _ => Action::None,
             },
 

@@ -22,23 +22,87 @@ pub enum NoticeLevel {
 pub struct NoticePopup {
     message: Cow<'static, str>,
     level: NoticeLevel,
+    scroll: u16,
 }
 
 impl NoticePopup {
+    const X_PADDING: u16 = 2; // Borders
+    const Y_PADDING: u16 = 2; // Borders
+    const MAX_WIDTH: u16 = 80 + Self::X_PADDING;
+    const MIN_WIDTH: u16 = 30 + Self::X_PADDING;
+    const MIN_HEIGHT: u16 = 5 + Self::Y_PADDING;
+    const MAX_HEIGHT: u16 = 20 + Self::Y_PADDING;
+
     pub fn create(message: impl Into<Cow<'static, str>>, level: NoticeLevel) -> Box<dyn Popup> {
         Box::new(Self {
             message: message.into(),
             level,
+            scroll: 0,
         })
+    }
+
+    /// Helper to calculate the width of the popup and total number of wrapped lines (basis for the
+    /// height of the popup). The total lines alone is likely not the final height of the popup. To
+    /// compute that, pass the total line count to `Self::final_height`.
+    ///
+    /// Returns (target_width, total_lines).
+    fn content_dimensions(&self) -> (u16, u16) {
+        let max_line_len = self
+            .message
+            .lines()
+            .map(|line| line.chars().count())
+            .max()
+            .unwrap_or(0) as u16;
+
+        // Total popup width, including borders
+        let target_width = max_line_len
+            .saturating_add(Self::X_PADDING)
+            .clamp(Self::MIN_WIDTH, Self::MAX_WIDTH);
+
+        // Inner width, excluding borders
+        let inner_width = target_width.saturating_sub(Self::X_PADDING);
+
+        let mut total_lines: u16 = 0;
+        for line in self.message.lines() {
+            let line_len = line.chars().count() as u16;
+            let wrapped_lines = line_len.div_ceil(inner_width.max(1));
+            // `.max(1)` is needed so that empty lines still display
+            total_lines += wrapped_lines.max(1);
+        }
+
+        (target_width, total_lines)
+    }
+
+    /// Helper to compute the height of the popup, given the wrapped line count.
+    fn target_height(&self, total_lines: u16) -> u16 {
+        total_lines
+            .saturating_add(Self::Y_PADDING)
+            .clamp(Self::MIN_HEIGHT, Self::MAX_HEIGHT)
     }
 }
 
 impl KeyHandler for NoticePopup {
     fn handle_key(&mut self, key: KeyEvent) -> Action {
-        if key.code == KeyCode::Esc {
-            Action::PopPopup
-        } else {
-            Action::None
+        match key.code {
+            KeyCode::Esc => Action::PopPopup,
+
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.scroll = self.scroll.saturating_sub(1);
+                Action::None
+            }
+
+            KeyCode::Down | KeyCode::Char('j') => {
+                let (_, total_lines) = self.content_dimensions();
+                let target_height = self.target_height(total_lines);
+                let visible_height = target_height.saturating_sub(Self::Y_PADDING);
+
+                let max_scroll = total_lines.saturating_sub(visible_height);
+
+                self.scroll = self.scroll.saturating_add(1).min(max_scroll);
+                Action::None
+            }
+
+            _ => Action::None,
         }
     }
 }
@@ -60,12 +124,18 @@ impl Popup for NoticePopup {
 
         Paragraph::new(text)
             .block(block)
-            .alignment(Alignment::Left)
             .wrap(Wrap { trim: true })
+            .scroll((self.scroll, 0))
             .render(area, buf);
     }
 
     fn hint_size(&self) -> SizeHint {
-        (Constraint::Percentage(50), Constraint::Percentage(30)) // TODO: Dynamic sizing
+        let (target_width, total_lines) = self.content_dimensions();
+        let target_height = self.target_height(total_lines);
+
+        (
+            Constraint::Length(target_width),
+            Constraint::Length(target_height),
+        )
     }
 }
