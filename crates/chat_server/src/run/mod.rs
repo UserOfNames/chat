@@ -29,7 +29,7 @@ use listener::Listener;
 use server_state::ServerState;
 use tracing::{debug, info, instrument};
 use tracing_appender::{non_blocking::WorkerGuard, rolling};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{DEFAULT_CONFIG, DefaultPaths, ENV_VAR_PREFIX};
 
@@ -281,6 +281,9 @@ pub async fn main(default_paths: Option<DefaultPaths>, args: RunArgs) -> anyhow:
 }
 
 fn init_logging(config: &Config) -> Option<WorkerGuard> {
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("trace,rustls=warn,mio=warn"));
+
     let stdout_layer = config.log_to_stdout.then(tracing_subscriber::fmt::layer);
 
     let (file_layer, file_guard) = if config.log_to_file {
@@ -299,6 +302,7 @@ fn init_logging(config: &Config) -> Option<WorkerGuard> {
     tracing_subscriber::registry()
         .with(stdout_layer)
         .with(file_layer)
+        .with(filter)
         .init();
 
     file_guard

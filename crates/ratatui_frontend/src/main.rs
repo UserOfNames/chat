@@ -31,7 +31,7 @@ use tokio::{
 };
 use tracing::{debug, error, info, instrument, warn};
 use tracing_appender::{non_blocking::WorkerGuard, rolling};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use connection_state::{ConnectionState, MessageContext};
 use ui::{
@@ -518,6 +518,9 @@ fn try_to_write_config_file(path: &Path) {
 }
 
 fn init_logging(config: &Config) -> Option<WorkerGuard> {
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("trace,rustls=warn,mio=warn"));
+
     let (file_layer, file_guard) = if config.log_to_file {
         let appender = rolling::daily(&config.log_dir, "ui.log");
         let (appender, guard) = tracing_appender::non_blocking(appender);
@@ -531,7 +534,10 @@ fn init_logging(config: &Config) -> Option<WorkerGuard> {
         (None, None)
     };
 
-    tracing_subscriber::registry().with(file_layer).init();
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(file_layer)
+        .init();
 
     file_guard
 }
