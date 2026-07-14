@@ -12,7 +12,7 @@ type ProtoSendDestination = send_message::Destination;
 
 /// First message from the client to the server, indicating a desire to connect and requesting the
 /// given username.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ClientHello {
     pub requested_name: String,
@@ -37,7 +37,7 @@ impl From<ClientHello> for proto::ClientHello {
 }
 
 /// A request to fetch the server's channel list in bulk.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FetchChannels;
 
@@ -56,7 +56,7 @@ impl From<FetchChannels> for proto::FetchChannels {
 }
 
 /// A request to fetch the server's user list in bulk.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FetchUsers;
 
@@ -75,7 +75,7 @@ impl From<FetchUsers> for proto::FetchUsers {
 }
 
 /// Where to send a chat message.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SendDestination {
     /// Send to a channel with the given ID.
@@ -106,7 +106,7 @@ impl From<SendDestination> for ProtoSendDestination {
 }
 
 /// A chat message sent to the server.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SendMessage {
     /// The message's content.
@@ -142,7 +142,7 @@ impl From<SendMessage> for proto::SendMessage {
 }
 
 /// User information to update.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UpdateInfo {
     pub name: Option<String>,
@@ -167,7 +167,7 @@ impl From<UpdateInfo> for proto::UpdateInfo {
 }
 
 /// A command sent from the client backend to the server.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum NetworkCommand {
     /// Initial message to the server, requesting to connect.

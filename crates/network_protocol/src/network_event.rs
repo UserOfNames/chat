@@ -11,7 +11,7 @@ use crate::{
 type ProtoReceiveDestination = received_message::Destination;
 
 /// Details about where a chat message is sent to.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ReceiveDestination {
     /// Message is sent directly to the client.
@@ -42,7 +42,7 @@ impl From<ReceiveDestination> for ProtoReceiveDestination {
 }
 
 /// A message sent from some other client to either a specific user, or a whole channel.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ReceivedMessage {
     /// The message's content.
@@ -87,7 +87,7 @@ impl From<ReceivedMessage> for proto::ReceivedMessage {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ServerHello {
     pub your_id: UserId,
@@ -121,7 +121,7 @@ impl From<ServerHello> for proto::ServerHello {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ChannelInfo {
     pub id: ChannelId,
@@ -148,7 +148,7 @@ impl From<ChannelInfo> for proto::ChannelInfo {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserInfo {
     pub id: UserId,
@@ -177,7 +177,7 @@ impl From<UserInfo> for proto::UserInfo {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ChannelSync {
     pub channels: Vec<ChannelInfo>,
@@ -206,7 +206,7 @@ impl From<ChannelSync> for proto::ChannelSync {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UserSync {
     pub users: Vec<UserInfo>,
@@ -290,7 +290,7 @@ impl fmt::Display for ErrorKind {
 }
 
 /// An event indicating an error occured on the server.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ErrorEvent {
     pub kind: ErrorKind,
@@ -328,7 +328,7 @@ impl fmt::Display for ErrorEvent {
 impl error::Error for ErrorEvent {}
 
 /// An event sent from the server to the client backend.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum NetworkEvent {
     /// Initial message to give the client session info and state.
@@ -352,6 +352,7 @@ pub enum NetworkEvent {
     /// Received a message from some other connected client.
     ReceivedMessage(ReceivedMessage),
 
+    /// An error occured on the server.
     ErrorEvent(ErrorEvent),
 }
 
