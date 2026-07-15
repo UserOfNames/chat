@@ -134,3 +134,83 @@ impl TildeRelativePathBuf {
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_named_project_dirs_appends_component() {
+        let component = Path::new("test_component");
+        let dirs = NamedProjectDirs::new(component)
+            .expect("Failed to create NamedProjectDirs. This likely indicates an environment error, not a logic error.");
+
+        assert!(
+            dirs.config_dir().ends_with(component),
+            "config_dir did not end with the component name"
+        );
+        assert!(
+            dirs.data_dir().ends_with(component),
+            "data_dir did not end with the component name"
+        );
+        assert!(
+            dirs.state_dir().ends_with(component),
+            "state_dir did not end with the component name"
+        );
+    }
+
+    #[test]
+    fn test_expand_leading_tilde_with_empty_path() {
+        let path = Path::new("");
+
+        let result = TildeRelativePathBuf::expand_leading_tilde(path);
+
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_expand_leading_tilde_with_remainder() {
+        let path = Path::new("~/documents/config.toml");
+        let expected = home_dir()
+            .expect("Home directory not found for test execution")
+            .join("documents/config.toml");
+
+        let result = TildeRelativePathBuf::expand_leading_tilde(path)
+            .expect("Expected Some(_) because path starts with ~")
+            .expect("Expected Ok(_) because home_dir should resolve");
+
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_expand_leading_tilde_standalone() {
+        let path = Path::new("~");
+        let home = home_dir().expect("Home directory not found for test execution");
+
+        let result = TildeRelativePathBuf::expand_leading_tilde(path)
+            .expect("Expected Some(_) because path starts with ~")
+            .expect("Expected Ok(_) because home_dir should resolve");
+
+        assert_eq!(result, home);
+    }
+
+    #[test]
+    fn test_expand_leading_tilde_ignores_non_leading_tildes() {
+        let path1 = Path::new("documents/~/test.txt");
+        let path2 = Path::new("documents/test.txt");
+        let path3 = Path::new("/~/documents");
+
+        assert!(
+            TildeRelativePathBuf::expand_leading_tilde(path1).is_none(),
+            "Expanded a tilde that was not the first component"
+        );
+        assert!(
+            TildeRelativePathBuf::expand_leading_tilde(path2).is_none(),
+            "Attempted to expand a path with no tilde"
+        );
+        assert!(
+            TildeRelativePathBuf::expand_leading_tilde(path3).is_none(),
+            "Expanded an absolute path containing a tilde"
+        );
+    }
+}
