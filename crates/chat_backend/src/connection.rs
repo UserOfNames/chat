@@ -3,7 +3,7 @@ use std::net::{SocketAddr, ToSocketAddrs};
 
 use futures::{SinkExt, StreamExt};
 use rustls::pki_types::ServerName;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsConnector, client::TlsStream};
 use tokio_util::codec::Framed;
@@ -13,12 +13,12 @@ use network_protocol::{NetworkCommand, NetworkEvent};
 
 /// A connection to a chat server.
 #[derive(Debug)]
-pub struct Connection {
-    stream: Framed<TlsStream<TcpStream>, ClientCodec>,
+pub struct Connection<S = TlsStream<TcpStream>> {
+    stream: Framed<S, ClientCodec>,
     addr: SocketAddr,
 }
 
-impl Connection {
+impl Connection<TlsStream<TcpStream>> {
     /// Create a new `Connection` to the server at `host:port`.
     ///
     /// If no port is provided, the [default port](network_protocol::DEFAULT_LISTENER_PORT) is used.
@@ -52,7 +52,12 @@ impl Connection {
 
         Ok(Self { stream, addr })
     }
+}
 
+impl<S> Connection<S>
+where
+    S: Unpin + AsyncRead + AsyncWrite,
+{
     /// Consume the `Connection` and attempt a clean disconnect.
     ///
     /// Returns an error if the disconnect could not be done cleanly.
