@@ -141,3 +141,53 @@ impl KeyHandler for Sidebar {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyEventKind, KeyModifiers};
+
+    fn press(code: KeyCode) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::empty(),
+            kind: KeyEventKind::Press,
+            state: crossterm::event::KeyEventState::empty(),
+        }
+    }
+
+    #[test]
+    fn test_focus_transitions_and_yielding() {
+        let mut sidebar = Sidebar::new();
+        assert_eq!(sidebar.focus, Focus::Unfocused);
+
+        // Transition to Channels
+        let action = sidebar.handle_key(press(KeyCode::Char('c')));
+        assert!(matches!(action, Action::None));
+        assert_eq!(sidebar.focus, Focus::Channels);
+
+        // Escape yields focus back to the parent
+        let action = sidebar.handle_key(press(KeyCode::Esc));
+        assert!(matches!(action, Action::YieldFocus));
+        assert_eq!(sidebar.focus, Focus::Unfocused);
+
+        // Transition to Users
+        let action = sidebar.handle_key(press(KeyCode::Char('u')));
+        assert!(matches!(action, Action::None));
+        assert_eq!(sidebar.focus, Focus::Users);
+        
+        // Escape yields focus back again
+        let action = sidebar.handle_key(press(KeyCode::Esc));
+        assert!(matches!(action, Action::YieldFocus));
+    }
+
+    #[test]
+    #[should_panic(expected = "If the sidebar is unfocused")]
+    fn test_unfocused_sidebar_panics_on_invalid_input() {
+        let mut sidebar = Sidebar::new();
+        
+        // If the MainPanel routes a random key (like 'j') to the sidebar 
+        // while it is Unfocused, the sidebar should panic to flag the routing bug.
+        sidebar.handle_key(press(KeyCode::Char('j')));
+    }
+}
