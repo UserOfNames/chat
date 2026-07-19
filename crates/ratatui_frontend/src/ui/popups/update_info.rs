@@ -56,3 +56,61 @@ impl Popup for UpdateInfoPopup {
         (Constraint::Percentage(30), Constraint::Length(3))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crossterm::event::{KeyEventKind, KeyModifiers};
+
+    use super::*;
+
+    fn press(code: KeyCode) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::empty(),
+            kind: KeyEventKind::Press,
+            state: crossterm::event::KeyEventState::empty(),
+        }
+    }
+
+    fn type_string(popup: &mut dyn Popup, text: &str) {
+        for c in text.chars() {
+            popup.handle_key(press(KeyCode::Char(c)));
+        }
+    }
+
+    #[test]
+    fn test_basic_key_handling() {
+        let mut popup = UpdateInfoPopup::create();
+
+        assert!(matches!(popup.handle_key(press(KeyCode::Esc)), Action::PopPopup));
+
+    }
+
+    #[test]
+    fn test_enter_all_fields() {
+        let mut popup = UpdateInfoPopup::create();
+
+        type_string(&mut *popup, "new-username");
+
+        let action = popup.handle_key(press(KeyCode::Enter));
+
+        let Action::UpdateInfo(params) = action else {
+            panic!("Expected Action::UpdateInfo, got {action:?}");
+        };
+
+        assert!(params.name.is_some(), "Expected params.name to be Some(_), got None");
+    }
+
+    #[test]
+    fn test_enter_no_fields() {
+        let mut popup = UpdateInfoPopup::create();
+
+        let action = popup.handle_key(press(KeyCode::Enter));
+
+        let Action::UpdateInfo(params) = action else {
+            panic!("Expected Action::UpdateInfo, got {action:?}");
+        };
+
+        assert!(params.name.is_none(), "Expected params.name to be None, got Some(_)");
+    }
+}

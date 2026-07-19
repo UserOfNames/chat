@@ -124,6 +124,7 @@ impl KeyHandler for ConnectPopup {
                 Action::None
             }
 
+            // TODO: This is an abomination of a match arm
             KeyCode::Enter => {
                 let username = self.inputs[Focus::Username as usize]
                     .lines()
@@ -212,6 +213,136 @@ impl Popup for ConnectPopup {
     }
 
     fn hint_size(&self) -> SizeHint {
+        // TODO: Constraint::Length(9) is a magic number, due something about that (probably more
+        // const shit like in commands)
         (Constraint::Percentage(50), Constraint::Length(9))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crossterm::event::{KeyEventKind, KeyModifiers};
+
+    fn press(code: KeyCode) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::empty(),
+            kind: KeyEventKind::Press,
+            state: crossterm::event::KeyEventState::empty(),
+        }
+    }
+
+    fn type_string(popup: &mut dyn Popup, text: &str) {
+        for c in text.chars() {
+            popup.handle_key(press(KeyCode::Char(c)));
+        }
+    }
+
+    #[test]
+    fn test_basic_key_handling() {
+        let mut popup = ConnectPopup::create();
+
+        // Esc triggers PopPopup
+        assert!(matches!(popup.handle_key(press(KeyCode::Esc)), Action::PopPopup));
+
+        // Tab/Down and BackTab/Up cycle Focus, triggering None
+        assert!(matches!(popup.handle_key(press(KeyCode::Tab)), Action::None));
+        assert!(matches!(popup.handle_key(press(KeyCode::Down)), Action::None));
+        assert!(matches!(popup.handle_key(press(KeyCode::BackTab)), Action::None));
+        assert!(matches!(popup.handle_key(press(KeyCode::Up)), Action::None));
+
+        // Enter triggers Connect, but this cannot easily be tested here, as it requires more setup.
+        // Other tests cover it.
+    }
+
+    #[test]
+    fn test_successful_connection_submission_with_port() {
+        let mut popup = ConnectPopup::create();
+
+        // Type host
+        type_string(&mut *popup, "localhost");
+
+        // Change focus to username and type username
+        popup.handle_key(press(KeyCode::Tab));
+        type_string(&mut *popup, "TestUser");
+
+        // Change focus to port and type port
+        popup.handle_key(press(KeyCode::Tab));
+        type_string(&mut *popup, "1234");
+
+        // Submit
+        let action = popup.handle_key(press(KeyCode::Enter));
+
+        let Action::Connect(params) = action else {
+            panic!("Expected Action::Connect, got {:?}", action);
+        };
+
+        assert_eq!(params.host, "localhost");
+        assert_eq!(params.initial_username, "TestUser");
+        assert_eq!(params.port, Some(1234));
+    }
+
+    #[test]
+    fn test_successful_connection_submission_without_port() {
+        let mut popup = ConnectPopup::create();
+
+        // Type host
+        type_string(&mut *popup, "localhost");
+
+        // Change focus to username and type username
+        popup.handle_key(press(KeyCode::Tab));
+        type_string(&mut *popup, "TestUser");
+
+        // Submit (no port entered)
+        let action = popup.handle_key(press(KeyCode::Enter));
+
+        let Action::Connect(params) = action else {
+            panic!("Expected Action::Connect, got {:?}", action);
+        };
+
+        assert_eq!(params.host, "localhost");
+        assert_eq!(params.initial_username, "TestUser");
+        assert_eq!(params.port, None);
+    }
+
+    #[test]
+    fn test_missing_username_shows_error_notice() {
+        let mut popup = ConnectPopup::create();
+
+        // Type host, but skip username
+        type_string(&mut *popup, "localhost");
+        popup.handle_key(press(KeyCode::Tab)); // Now on Username (left empty)
+        popup.handle_key(press(KeyCode::Tab)); // Now on Port
+        type_string(&mut *popup, "8080");
+
+        let action = popup.handle_key(press(KeyCode::Enter));
+
+        // We expect a PushPopup containing a NoticePopup
+        assert!(
+            matches!(action, Action::PushPopup(_)),
+            "Expected an error popup for missing username, got {action:?}"
+        );
+    }
+
+    #[test]
+    fn test_invalid_port_shows_error_notice() {
+        let mut popup = ConnectPopup::create();
+
+        // Type host and username
+        type_string(&mut *popup, "localhost");
+        popup.handle_key(press(KeyCode::Tab));
+        type_string(&mut *popup, "TestUser");
+        popup.handle_key(press(KeyCode::Tab));
+
+        // Type an invalid port
+        type_string(&mut *popup, "NOT_A_NUMBER");
+
+        let action = popup.handle_key(press(KeyCode::Enter));
+
+        assert!(
+            matches!(action, Action::PushPopup(_)),
+            "Expected an error popup for invalid port"
+        );
     }
 }

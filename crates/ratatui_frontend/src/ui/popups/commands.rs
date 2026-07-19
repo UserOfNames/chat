@@ -101,3 +101,40 @@ impl Popup for CommandsPopup {
         (Constraint::Length(width), Constraint::Length(height))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crossterm::event::{KeyEventKind, KeyModifiers};
+
+    use super::*;
+
+    fn press(code: KeyCode) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::empty(),
+            kind: KeyEventKind::Press,
+            state: crossterm::event::KeyEventState::empty(),
+        }
+    }
+
+    #[test]
+    fn test_key_handling() {
+        let mut popup = CommandsPopup::create();
+
+        // Esc returns PopPopup
+        assert!(matches!(popup.handle_key(press(KeyCode::Esc)), Action::PopPopup));
+
+        // 'q' spawns a QuitPopup
+        assert!(matches!(popup.handle_key(press(KeyCode::Char('q'))), Action::PushPopup(_)));
+
+        // 'c' spawns a ConnectPopup
+        assert!(matches!(popup.handle_key(press(KeyCode::Char('c'))), Action::PushPopup(_)));
+
+        // 'u' spawns a UpdateInfoPopup
+        assert!(matches!(popup.handle_key(press(KeyCode::Char('u'))), Action::PushPopup(_)));
+
+        // All else is ignored
+        assert!(matches!(popup.handle_key(press(KeyCode::Char('a'))), Action::None));
+        assert!(matches!(popup.handle_key(press(KeyCode::Char('3'))), Action::None));
+    }
+}

@@ -61,3 +61,35 @@ impl Popup for QuitPopup {
         (Constraint::Percentage(30), Constraint::Percentage(20))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crossterm::event::{KeyEventKind, KeyModifiers};
+
+    use super::*;
+
+    fn press(code: KeyCode) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::empty(),
+            kind: KeyEventKind::Press,
+            state: crossterm::event::KeyEventState::empty(),
+        }
+    }
+
+    #[test]
+    fn test_quit_popup_key_handling() {
+        let mut popup = QuitPopup::create();
+
+        // Yes triggers Quit
+        assert!(matches!(popup.handle_key(press(KeyCode::Char('y'))), Action::Quit));
+
+        // No or Esc triggers PopPopup
+        assert!(matches!(popup.handle_key(press(KeyCode::Char('n'))), Action::PopPopup));
+        assert!(matches!(popup.handle_key(press(KeyCode::Esc)), Action::PopPopup));
+
+        // Anything else is ignored
+        assert!(matches!(popup.handle_key(press(KeyCode::Enter)), Action::None));
+        assert!(matches!(popup.handle_key(press(KeyCode::Char('q'))), Action::None));
+    }
+}

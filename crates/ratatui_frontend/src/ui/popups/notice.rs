@@ -139,3 +139,109 @@ impl Popup for NoticePopup {
         )
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::ui::popups::connect::ConnectPopup;
+
+    use super::*;
+    use crossterm::event::{KeyEventKind, KeyModifiers};
+
+    fn press(code: KeyCode) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::empty(),
+            kind: KeyEventKind::Press,
+            state: crossterm::event::KeyEventState::empty(),
+        }
+    }
+
+    #[test]
+    fn test_notice_popup_key_handling() {
+        let mut popup = ConnectPopup::create();
+
+        // Esc triggers PopPopup
+        assert!(matches!(popup.handle_key(press(KeyCode::Esc)), Action::PopPopup));
+
+        // Up or 'k' scrolls up, triggering None
+        assert!(matches!(popup.handle_key(press(KeyCode::Up)), Action::None));
+        assert!(matches!(popup.handle_key(press(KeyCode::Char('k'))), Action::None));
+
+        // Down or 'j' scrolls down, triggering None
+        assert!(matches!(popup.handle_key(press(KeyCode::Down)), Action::None));
+        assert!(matches!(popup.handle_key(press(KeyCode::Char('j'))), Action::None));
+    }
+
+    #[test]
+    fn test_dimensions_clamp_to_minimums() {
+        let popup = NoticePopup {
+            message: Cow::Borrowed("Short"),
+            level: NoticeLevel::Notification,
+            scroll: 0,
+        };
+
+        let (width, lines) = popup.content_dimensions();
+        assert_eq!(width, NoticePopup::MIN_WIDTH);
+        assert_eq!(lines, 1);
+
+        let height = popup.target_height(lines);
+        assert_eq!(height, NoticePopup::MIN_HEIGHT);
+    }
+
+    #[test]
+    fn test_dimensions_clamp_to_maximums_and_wrap() {
+        let long_message = "A".repeat(2000);
+        let popup = NoticePopup {
+            message: Cow::Owned(long_message),
+            level: NoticeLevel::Error,
+            scroll: 0,
+        };
+
+        let (width, lines) = popup.content_dimensions();
+        assert_eq!(width, NoticePopup::MAX_WIDTH);
+
+        // Inner width is 80. 200 chars / 80 = 25 -> ceil to 25 lines.
+        assert_eq!(lines, 25); 
+
+        let height = popup.target_height(lines);
+        // 25 lines should be clamped to the MAX_HEIGHT
+        assert_eq!(height, NoticePopup::MAX_HEIGHT); 
+    }
+
+    #[test]
+    fn test_scrolling_clamps_correctly() {
+        // Create 30 lines of text (exceeds MAX_HEIGHT of 22)
+        let tall_message = "Line\n".repeat(30);
+        let mut popup = NoticePopup {
+            message: Cow::Owned(tall_message),
+            level: NoticeLevel::Notification,
+            scroll: 0,
+        };
+
+        // 30 lines. target_height = 22 (clamped). visible_height = 20.
+        // max_scroll = 30 - 20 = 10.
+
+        // Test scrolling down
+        popup.handle_key(press(KeyCode::Char('j')));
+        assert_eq!(popup.scroll, 1);
+
+        popup.handle_key(press(KeyCode::Down));
+        assert_eq!(popup.scroll, 2);
+
+        // Scroll past the maximum
+        for _ in 0..20 {
+            popup.handle_key(press(KeyCode::Down));
+        }
+        assert_eq!(popup.scroll, 10, "Scroll should clamp at max_scroll (10)");
+
+        // Test scrolling back up
+        popup.handle_key(press(KeyCode::Char('k')));
+        assert_eq!(popup.scroll, 9);
+
+        // Scroll past the top
+        for _ in 0..20 {
+            popup.handle_key(press(KeyCode::Up));
+        }
+        assert_eq!(popup.scroll, 0, "Scroll should clamp at 0");
+    }
+}

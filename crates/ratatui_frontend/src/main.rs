@@ -12,8 +12,7 @@ use anyhow::{Context, bail};
 use chat_backend::{
     ChatBackend,
     client_command::ClientCommand,
-    client_event::{self, ClientEvent},
-    network_protocol::{ErrorEvent, NetworkCommand, SendDestination, SendMessage},
+    client_event::{self, ClientEvent}, network_protocol::{ErrorEvent, NetworkCommand, SendDestination, SendMessage},
 };
 use clap::Parser;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
