@@ -89,7 +89,7 @@ impl Display for UserId {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ChannelId(u64);
 
-// Even though this conversion is infallible, to maintain consistence with all other wire -> domain
+// Even though this conversion is infallible, to maintain consistency with all other wire -> domain
 // conversion impls, this is TryFrom anyways.
 impl TryFrom<u64> for ChannelId {
     type Error = io::Error;

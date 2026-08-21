@@ -145,3 +145,88 @@ impl KeyHandler for MainPanel {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crossterm::event::{KeyEventKind, KeyModifiers};
+
+    fn press(code: KeyCode) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::empty(),
+            kind: KeyEventKind::Press,
+            state: crossterm::event::KeyEventState::empty(),
+        }
+    }
+
+    #[test]
+    fn test_default_state_and_input_transitions() {
+        let mut panel = MainPanel::new();
+        assert_eq!(panel.focus, Focus::None);
+
+        // Enter Input mode
+        let action = panel.handle_key(press(KeyCode::Char('i')));
+        assert_eq!(panel.focus, Focus::Input);
+        assert!(matches!(action, Action::None));
+
+        // Escape out of Input mode
+        let action = panel.handle_key(press(KeyCode::Esc));
+        assert_eq!(panel.focus, Focus::None);
+        assert!(matches!(action, Action::None));
+    }
+
+    #[test]
+    fn test_typing_and_sending_message() {
+        let mut panel = MainPanel::new();
+        
+        // Enter input mode
+        panel.handle_key(press(KeyCode::Char('i')));
+
+        // Type "hi"
+        panel.handle_key(press(KeyCode::Char('h')));
+        panel.handle_key(press(KeyCode::Char('i')));
+
+        // Verify the textarea captured it
+        assert_eq!(panel.input.lines().join(""), "hi");
+
+        // Press Enter
+        let action = panel.handle_key(press(KeyCode::Enter));
+        
+        // Verify action is dispatched with the correct text
+        match action {
+            Action::SendMessage(msg) => assert_eq!(msg, "hi"),
+            _ => panic!("Expected SendMessage, got {:?}", action),
+        }
+
+        // Verify the input box was cleared for the next message
+        assert_eq!(panel.input.lines().join(""), "");
+        assert_eq!(panel.focus, Focus::Input); 
+    }
+
+    #[test]
+    fn test_sidebar_delegation_and_yielding() {
+        let mut panel = MainPanel::new();
+
+        // 'c' should delegate to Sidebar and shift focus
+        let action = panel.handle_key(press(KeyCode::Char('c')));
+        assert_eq!(panel.focus, Focus::Sidebar);
+        assert!(matches!(action, Action::None));
+
+        // 'Esc' should be routed to the Sidebar, which returns YieldFocus.
+        // The MainPanel must catch this and drop its focus to None.
+        let action = panel.handle_key(press(KeyCode::Esc));
+        assert_eq!(panel.focus, Focus::None);
+        assert!(matches!(action, Action::YieldFocus));
+    }
+
+    #[test]
+    fn test_global_commands_popup() {
+        let mut panel = MainPanel::new();
+
+        // When unfocused, Esc should open the command palette
+        let action = panel.handle_key(press(KeyCode::Esc));
+        
+        assert!(matches!(action, Action::PushPopup(_)));
+    }
+}

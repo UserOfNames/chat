@@ -206,3 +206,141 @@ impl ConnectionState {
         self.channel_render_order.append(&mut channels);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::net::{Ipv4Addr, SocketAddrV4};
+
+    use super::*;
+
+    use chat_backend::network_protocol::UserSync;
+    use uuid::Uuid;
+
+    fn mock_addr() -> SocketAddr {
+        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080))
+    }
+
+    fn mock_state() -> ConnectionState {
+        let sync = InitialSync {
+            your_id: UserId(Uuid::from_u128(1)),
+            default_channel_id: Some(ChannelId::try_from(10).unwrap()),
+            server_addr: mock_addr(),
+        };
+        ConnectionState::new(sync)
+    }
+
+    #[test]
+    fn test_new_sets_correct_defaults() {
+        let state = mock_state();
+
+        assert_eq!(state.your_id, UserId(Uuid::from_u128(1)));
+        assert_eq!(
+            state.message_context,
+            Some(MessageContext::Channel(ChannelId::try_from(10).unwrap()))
+        );
+        assert!(state.users.is_empty());
+        assert!(state.channels.is_empty());
+    }
+
+    #[test]
+    fn test_user_cache_sorting_puts_self_first_then_alphabetical() {
+        let mut state = mock_state();
+
+        // Add users via sync
+        let sync = UserSync {
+            users: vec![
+                UserInfo {
+                    id: UserId(Uuid::from_u128(2)),
+                    name: "Zebra".to_owned(),
+                },
+                UserInfo {
+                    id: UserId(Uuid::from_u128(3)),
+                    name: "Apple".to_owned(),
+                },
+                UserInfo {
+                    id: UserId(Uuid::from_u128(1)),
+                    name: "MyUser".to_owned(),
+                }, // This is "your_id"
+            ],
+        };
+
+        state.update_from_event(ClientEvent::UserSync(sync));
+
+        // The render order should be: Self (1), then Apple (3), then Zebra (2)
+        assert_eq!(
+            state.user_render_order,
+            vec![
+                UserId(Uuid::from_u128(1)),
+                UserId(Uuid::from_u128(3)),
+                UserId(Uuid::from_u128(2))
+            ]
+        );
+    }
+
+    #[test]
+    fn test_user_left_clears_active_message_context() {
+        let mut state = mock_state();
+        let target_user = UserId(Uuid::from_u128(5));
+
+        // Add the user and set them as the active context
+        state.users.insert(target_user, "Bob".to_owned());
+        state.message_context = Some(MessageContext::User(target_user));
+
+        // User leaves
+        state.update_from_event(ClientEvent::UserLeft(target_user));
+
+        // Ensure user is removed from map
+        assert!(!state.users.contains_key(&target_user));
+
+        // Ensure context was cleared because we were looking at them
+        assert_eq!(state.message_context, None);
+    }
+
+    #[test]
+    fn test_push_message_routes_received_dm_to_sender_context() {
+        let mut state = mock_state();
+        let sender = UserId(Uuid::from_u128(5));
+
+        // We (UserId 1) receive a message from UserId 5
+        let msg = ReceivedMessage {
+            sender_id: sender,
+            destination: ReceiveDestination::User(state.your_id),
+            contents: "Hello!".to_owned(),
+        };
+
+        state.update_from_event(ClientEvent::ReceivedMessage(msg));
+
+        // The message should be filed under the SENDER's context
+        let context = MessageContext::User(sender);
+        assert_eq!(state.messages.get(&context).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_push_message_routes_sent_dm_to_destination_context() {
+        let mut state = mock_state();
+        let recipient = UserId(Uuid::from_u128(5));
+
+        // We (UserId 1) send a message to UserId 5. The server echoes it back to us as a ReceivedMessage.
+        let msg = ReceivedMessage {
+            sender_id: state.your_id,
+            destination: ReceiveDestination::User(recipient),
+            contents: "Hi Bob!".to_owned(),
+        };
+
+        state.update_from_event(ClientEvent::ReceivedMessage(msg));
+
+        // The message should be filed under the RECIPIENT's context, not ours.
+        let context = MessageContext::User(recipient);
+        assert_eq!(state.messages.get(&context).unwrap().len(), 1);
+    }
+
+    #[test]
+    #[should_panic(expected = "Disconnection events should result in the destruction")]
+    fn test_disconnect_event_panics() {
+        let mut state = mock_state();
+
+        // By design, the App should intercept this and destroy the ConnectionState.
+        // If it gets routed here, something is fundamentally wrong in App::handle_client_event.
+        state.update_from_event(ClientEvent::Disconnected);
+    }
+}

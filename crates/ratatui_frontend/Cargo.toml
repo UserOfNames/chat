@@ -17,6 +17,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-appender = { workspace = true }
 tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
 
 chat_backend = { workspace = true }
 shared_utils = { workspace = true }

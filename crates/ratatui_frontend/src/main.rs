@@ -12,7 +12,8 @@ use anyhow::{Context, bail};
 use chat_backend::{
     ChatBackend,
     client_command::ClientCommand,
-    client_event::{self, ClientEvent}, network_protocol::{ErrorEvent, NetworkCommand, SendDestination, SendMessage},
+    client_event::{self, ClientEvent},
+    network_protocol::{ErrorEvent, NetworkCommand, SendDestination, SendMessage},
 };
 use clap::Parser;
 use crossterm::event::{Event, EventStream, KeyCode, KeyEvent, KeyEventKind};
@@ -539,4 +540,83 @@ fn init_logging(config: &Config) -> Option<WorkerGuard> {
         .init();
 
     file_guard
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chat_backend::client_command::ClientCommand;
+    use tokio::sync::mpsc;
+
+    fn mock_app() -> (App, Receiver<ClientCommand>) {
+        let (_event_tx, event_rx) = mpsc::channel(10);
+
+        let (cmd_tx, cmd_rx) = mpsc::channel(10);
+
+        (App::new(event_rx, cmd_tx), cmd_rx)
+    }
+
+    #[tokio::test]
+    async fn test_apply_action_quit_signals_backend() {
+        let (mut app, mut cmd_rx) = mock_app();
+
+        assert!(!app.is_quitting, "App should not start in a quitting state");
+
+        app.apply_action(Action::Quit).await;
+
+        assert!(app.is_quitting, "is_quitting flag must be set");
+
+        let cmd = cmd_rx
+            .try_recv()
+            .expect("App should have sent a command to the backend");
+        assert!(matches!(cmd, ClientCommand::Quit));
+    }
+
+    #[tokio::test]
+    async fn test_apply_action_send_message_without_connection() {
+        let (mut app, mut cmd_rx) = mock_app();
+
+        assert!(app.connection_state.is_none());
+        assert_eq!(app.popups.len(), 0);
+
+        app.apply_action(Action::SendMessage("Hello!".into())).await;
+
+        assert!(
+            cmd_rx.try_recv().is_err(),
+            "Should not send network command if disconnected"
+        );
+
+        assert_eq!(
+            app.popups.len(),
+            1,
+            "App should have spawned an error popup"
+        );
+    }
+
+    #[test]
+    fn test_handle_client_event_disconnected() {
+        let (mut app, _) = mock_app();
+
+        assert_eq!(app.popups.len(), 0);
+
+        app.handle_client_event(ClientEvent::Disconnected);
+
+        assert!(app.connection_state.is_none());
+
+        assert_eq!(app.popups.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_apply_action_popup_stack() {
+        let (mut app, _) = mock_app();
+
+        assert_eq!(app.popups.len(), 0);
+
+        let notice = NoticePopup::create("Test", NoticeLevel::Notification);
+        app.apply_action(Action::PushPopup(notice)).await;
+        assert_eq!(app.popups.len(), 1);
+
+        app.apply_action(Action::PopPopup).await;
+        assert_eq!(app.popups.len(), 0);
+    }
 }
