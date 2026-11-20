@@ -166,7 +166,6 @@ impl ServerState {
 
     /// Get a channel's [`ChannelInfo`] by its ID, if the ID is associated with a channel on the
     /// server.
-    #[expect(dead_code)]
     pub async fn get_channel_info(&self, id: ChannelId) -> Option<ChannelInfo> {
         self.channels
             .read_async(&id, |_, channel| channel.info.clone())
@@ -250,7 +249,6 @@ impl ServerState {
     }
 
     /// Get a user's [`UserInfo`] by their ID, if the ID is associated with a user on the server.
-    #[expect(dead_code)]
     pub async fn get_user_info(&self, id: UserId) -> Option<UserInfo> {
         self.users
             .read_async(&id, |_, value| value.info.clone())
@@ -506,5 +504,172 @@ impl ServerState {
     /// * Turning all letters to lowercase.
     fn normalize_username(name: &str) -> String {
         name.to_lowercase()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::{broadcast, mpsc};
+
+    fn mock_tx() -> mpsc::Sender<NetworkEvent> {
+        mpsc::channel(1).0
+    }
+
+    #[test]
+    fn test_username_validation() {
+        let max_len = 10;
+
+        // Valid cases
+        assert!(ServerState::validate_username("Alice", max_len).is_ok());
+        assert!(ServerState::validate_username("User-Name", max_len).is_ok());
+        assert!(ServerState::validate_username("Dev_123", max_len).is_ok());
+
+        // Invalid cases
+        assert!(matches!(
+            ServerState::validate_username("", max_len),
+            Err(UserNameError::Empty)
+        ));
+        assert!(matches!(
+            ServerState::validate_username("ThisNameIsWayTooLong", max_len),
+            Err(UserNameError::TooLong(10))
+        ));
+        assert!(matches!(
+            ServerState::validate_username("Bad@Name", max_len),
+            Err(UserNameError::InvalidCharacter)
+        ));
+        assert!(matches!(
+            ServerState::validate_username("No Spaces", max_len),
+            Err(UserNameError::InvalidCharacter)
+        ));
+    }
+
+    #[test]
+    fn test_username_normalization() {
+        assert_eq!(ServerState::normalize_username("ALICE"), "alice");
+        assert_eq!(ServerState::normalize_username("B-o_B"), "b-o_b");
+    }
+
+    #[tokio::test]
+    async fn test_user_registration_and_duplicates() {
+        let state = ServerState::new(None, 20);
+
+        // 1. Successful registration
+        let token = state
+            .handle_new_user("Alice".to_string(), 20, mock_tx())
+            .await
+            .expect("Should register successfully");
+
+        let user_info = state.get_user_info(token.id()).await.unwrap();
+        assert_eq!(user_info.name, "Alice");
+
+        // 2. Exact duplicate fails
+        let err = state
+            .handle_new_user("Alice".to_string(), 20, mock_tx())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            UserError::Name(UserNameError::AlreadyTaken(_))
+        ));
+
+        // 3. Case-insensitive duplicate fails
+        let err = state
+            .handle_new_user("aLiCe".to_string(), 20, mock_tx())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            UserError::Name(UserNameError::AlreadyTaken(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_update_user_info_and_name_release() {
+        let state = ServerState::new(None, 20);
+        let token = state
+            .handle_new_user("Alice".to_string(), 20, mock_tx())
+            .await
+            .unwrap();
+
+        // 1. Update name to Bob
+        let update = UpdateInfo {
+            name: Some("Bob".to_string()),
+            // Assume other fields in UpdateInfo are None for this test
+        };
+
+        state.update_user_info(&token, update, 20).await.unwrap();
+
+        // Verify the name actually changed
+        let user_info = state.get_user_info(token.id()).await.unwrap();
+        assert_eq!(user_info.name, "Bob");
+
+        // 2. Verify old name (Alice) is released and can be claimed by a new user
+        assert!(
+            state
+                .handle_new_user("Alice".to_string(), 20, mock_tx())
+                .await
+                .is_ok()
+        );
+
+        // 3. Verify new name (Bob) is protected
+        let err = state
+            .handle_new_user("bOb".to_string(), 20, mock_tx())
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            UserError::Name(UserNameError::AlreadyTaken(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_remove_user_releases_name() {
+        let state = ServerState::new(None, 20);
+        let token = state
+            .handle_new_user("Charlie".to_string(), 20, mock_tx())
+            .await
+            .unwrap();
+
+        // Remove the user
+        state.remove_user(token).await.unwrap();
+
+        // The name should be available immediately
+        assert!(
+            state
+                .handle_new_user("Charlie".to_string(), 20, mock_tx())
+                .await
+                .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_channel_management() {
+        let state = ServerState::new(None, 20);
+        let (tx, _rx) = broadcast::channel(1);
+        let channel_id = ChannelId::try_from(8).unwrap();
+
+        // 1. Add channel
+        assert!(
+            state
+                .add_channel(channel_id, "General".to_string(), tx.clone())
+                .await
+                .is_ok()
+        );
+
+        // 2. Prevent duplicate channel IDs
+        let err = state
+            .add_channel(channel_id, "Duplicate".to_string(), tx)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ChannelError::AlreadyExists(_)));
+
+        // 3. Fetch channel info
+        let info = state.get_channel_info(channel_id).await.unwrap();
+        assert_eq!(info.name, "General");
+
+        // 4. Fetch missing channel
+        let fake_id = ChannelId::try_from(1).unwrap();
+        assert!(state.get_channel_info(fake_id).await.is_none());
     }
 }
