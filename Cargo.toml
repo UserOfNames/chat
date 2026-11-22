@@ -19,6 +19,9 @@ clap = { version = "4", features = ["derive"] }
 directories = "6"
 figment = { version = "0.10", features = ["env", "toml"] }
 futures = "0.3"
+my_fs_utils = { git = "https://github.com/UserOfNames/my_lib_rs.git", features = ["tempfile"] }
+my_macros = { git = "https://github.com/UserOfNames/my_lib_rs.git" }
+my_string_utils = { git = "https://github.com/UserOfNames/my_lib_rs.git" }
 rcgen = { version = "0.14", features = ["x509-parser"] }
 rustls = "0.23"
 scc = "3"

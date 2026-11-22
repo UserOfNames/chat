@@ -3,13 +3,14 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Args;
+use my_fs_utils::WriteParams;
+use my_macros::first_match;
 use rcgen::{CertificateParams, IsCa, Issuer, KeyPair};
 use serde::{Deserialize, Serialize};
-use shared_utils::first_match;
 
 use crate::default_paths::DefaultPaths;
 
-use super::{WriteParams, write_with_params};
+use super::write_with_params;
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct InitServerCertsArgs {
@@ -116,30 +117,28 @@ pub fn init_server_certs(
 
     let new_keypair_pem = new_cert_keypair.serialize_pem();
 
-    let paramses = &[
-        WriteParams {
-            path: output_key_path,
-            contents: new_keypair_pem,
-            force: args.force,
-            mode: Some(0o400),
-        },
-        WriteParams {
-            path: output_cert_path,
-            contents: new_cert_pem,
-            force: args.force,
-            mode: None,
-        },
-    ];
-
-    write_with_params(paramses).context("Writing new files")?;
-
+    write_with_params(
+        WriteParams::new(&output_key_path, &new_keypair_pem).force(args.force),
+        Some(0o600),
+    )?;
     println!(
         "Server private key initialized at '{}'",
         output_key_path.display()
     );
+
+    write_with_params(
+        WriteParams::new(&output_cert_path, &new_cert_pem).force(args.force),
+        None,
+    )?;
     println!(
-        "Server private key initialized at '{}'",
+        "Server certificate initialized at '{}'",
         output_cert_path.display()
+    );
+
+    #[cfg(not(unix))]
+    eprintln!(
+        "WARNING: permissions cannot be set on non-unix platforms.\n\
+         Ensure the key file's permissions are correct."
     );
 
     Ok(())

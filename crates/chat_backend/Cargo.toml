@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 figment = { workspace = true }
 futures = { workspace = true }
+my_macros = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

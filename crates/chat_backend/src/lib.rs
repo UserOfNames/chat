@@ -17,6 +17,7 @@ use figment::{
     Figment,
     providers::{Format, Toml},
 };
+use my_macros::first_match;
 use rustls::{
     RootCertStore,
     pki_types::{
@@ -35,10 +36,7 @@ use connection::Connection;
 use network_protocol::{
     ClientHello, FetchChannels, FetchUsers, NetworkCommand, NetworkEvent, ServerHello,
 };
-use shared_utils::{
-    files::{NamedProjectDirs, TildeRelativePathBuf},
-    first_match,
-};
+use shared_utils::files::{NamedProjectDirs, TildeRelativePathBuf};
 use tracing::{debug, error, info, instrument, warn};
 
 const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");

@@ -9,6 +9,9 @@ clap = { workspace = true }
 figment = { workspace = true }
 futures = { workspace = true }
 directories = { workspace = true }
+my_fs_utils = { workspace = true }
+my_macros = { workspace = true }
+my_string_utils = { workspace = true }
 rcgen = { workspace = true }
 rustls = { workspace = true }
 scc = { workspace = true }

@@ -8,7 +8,7 @@ use ratatui::{
     widgets::{Block, Borders, Widget},
 };
 use ratatui_textarea::TextArea;
-use shared_utils::strings::StringExt;
+use my_string_utils::StringExt;
 
 use super::{
     Action, KeyHandler, Popup, SizeHint,

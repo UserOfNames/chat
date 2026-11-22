@@ -2,14 +2,14 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Args;
+use my_fs_utils::WriteParams;
+use my_macros::first_match;
 use rcgen::{BasicConstraints, CertificateParams, IsCa, Issuer, KeyPair};
 use serde::{Deserialize, Serialize};
-use shared_utils::first_match;
 
-use crate::{
-    default_paths::DefaultPaths,
-    init::{WriteParams, write_with_params},
-};
+use crate::default_paths::DefaultPaths;
+
+use super::write_with_params;
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct InitPkiArgs {
@@ -101,32 +101,41 @@ pub fn init_pki(default_paths: Option<DefaultPaths>, args: InitPkiArgs) -> anyho
     let server_cert_pem = server_cert.pem();
     let server_key_pem = server_keypair.serialize_pem();
 
-    let paramses = &[
-        WriteParams {
-            path: ca_key_path,
-            contents: ca_key_pem,
-            force: args.force,
-            mode: Some(0o400),
-        },
-        WriteParams {
-            path: ca_cert_path,
-            contents: ca_cert_pem,
-            force: args.force,
-            mode: None,
-        },
-        WriteParams {
-            path: server_key_path,
-            contents: server_key_pem,
-            force: args.force,
-            mode: None,
-        },
-        WriteParams {
-            path: server_cert_path,
-            contents: server_cert_pem,
-            force: args.force,
-            mode: None,
-        },
-    ];
+    write_with_params(
+        WriteParams::new(&ca_key_path, &ca_key_pem).force(args.force),
+        Some(0o600),
+    )?;
+    println!("CA private key initialized at '{}'", ca_key_path.display());
 
-    write_with_params(paramses).context("Writing new files")
+    write_with_params(
+        WriteParams::new(&ca_cert_path, &ca_cert_pem).force(args.force),
+        None,
+    )?;
+    println!("CA certificate initialized at '{}'", ca_cert_path.display());
+
+    write_with_params(
+        WriteParams::new(&server_key_path, &server_key_pem).force(args.force),
+        Some(0o600),
+    )?;
+    println!(
+        "Server private key initialized at '{}'",
+        ca_key_path.display()
+    );
+
+    write_with_params(
+        WriteParams::new(&server_cert_path, &server_cert_pem).force(args.force),
+        None,
+    )?;
+    println!(
+        "Server certificate initialized at '{}'",
+        ca_cert_path.display()
+    );
+
+    #[cfg(not(unix))]
+    eprintln!(
+        "WARNING: permissions cannot be set on non-unix platforms.\n\
+         Ensure the key files' permissions are correct."
+    );
+
+    Ok(())
 }

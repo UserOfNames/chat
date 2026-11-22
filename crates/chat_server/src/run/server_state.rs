@@ -1,8 +1,8 @@
+use my_string_utils::StringExt;
 use network_protocol::{
     ChannelId, ChannelInfo, ErrorEvent, ErrorKind, NetworkEvent, UpdateInfo, UserId, UserInfo,
 };
 use scc::{HashMap, HashSet};
-use shared_utils::strings::StringExt;
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
 

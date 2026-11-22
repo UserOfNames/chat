@@ -2,12 +2,13 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Args;
+use my_fs_utils::WriteParams;
+use my_macros::first_match;
 use serde::{Deserialize, Serialize};
-use shared_utils::first_match;
 
 use crate::{DEFAULT_CONFIG, default_paths::DefaultPaths};
 
-use super::{WriteParams, write_with_params};
+use super::write_with_params;
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct InitConfigArgs {
@@ -40,14 +41,10 @@ pub fn init_config(
         return Ok(());
     }
 
-    let paramses = &[WriteParams {
-        path: config_path,
-        contents: DEFAULT_CONFIG.to_owned(),
-        force: args.force,
-        mode: None,
-    }];
-
-    write_with_params(paramses).context("Saving config file")?;
+    write_with_params(
+        WriteParams::new(&config_path, DEFAULT_CONFIG).force(args.force),
+        None,
+    )?;
 
     println!("Default config initialized at '{}'", config_path.display());
 

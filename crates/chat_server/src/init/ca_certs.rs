@@ -2,13 +2,14 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use clap::Args;
+use my_fs_utils::WriteParams;
+use my_macros::first_match;
 use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair};
 use serde::{Deserialize, Serialize};
-use shared_utils::first_match;
 
 use crate::default_paths::DefaultPaths;
 
-use super::{WriteParams, write_with_params};
+use super::write_with_params;
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct InitCACertsArgs {
@@ -62,30 +63,28 @@ pub fn init_ca_certs(
 
     let key_pem = signing_key.serialize_pem();
 
-    let paramses = &[
-        WriteParams {
-            path: output_key_path,
-            contents: key_pem,
-            force: args.force,
-            mode: Some(0o400),
-        },
-        WriteParams {
-            path: output_cert_path,
-            contents: cert_pem,
-            force: args.force,
-            mode: None,
-        },
-    ];
-
-    write_with_params(paramses).context("Saving output files")?;
-
+    write_with_params(
+        WriteParams::new(&output_key_path, &key_pem).force(args.force),
+        Some(0o600),
+    )?;
     println!(
         "CA private key initialized at '{}'",
         output_key_path.display()
     );
+
+    write_with_params(
+        WriteParams::new(&output_cert_path, &cert_pem).force(args.force),
+        None,
+    )?;
     println!(
-        "CA private key initialized at '{}'",
+        "CA certificate initialized at '{}'",
         output_cert_path.display()
+    );
+
+    #[cfg(not(unix))]
+    eprintln!(
+        "WARNING: permissions cannot be set on non-unix platforms.\n\
+         Ensure the key file's permissions are correct."
     );
 
     Ok(())

@@ -1,12 +1,12 @@
 use chat_backend::network_protocol::UpdateInfo;
 use crossterm::event::{KeyCode, KeyEvent};
+use my_string_utils::StringExt;
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Rect},
     widgets::{Block, Widget},
 };
 use ratatui_textarea::TextArea;
-use shared_utils::strings::StringExt;
 
 use super::{Action, KeyHandler, Popup, SizeHint};
 
@@ -82,8 +82,10 @@ mod test {
     fn test_basic_key_handling() {
         let mut popup = UpdateInfoPopup::create();
 
-        assert!(matches!(popup.handle_key(press(KeyCode::Esc)), Action::PopPopup));
-
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Esc)),
+            Action::PopPopup
+        ));
     }
 
     #[test]
@@ -98,7 +100,10 @@ mod test {
             panic!("Expected Action::UpdateInfo, got {action:?}");
         };
 
-        assert!(params.name.is_some(), "Expected params.name to be Some(_), got None");
+        assert!(
+            params.name.is_some(),
+            "Expected params.name to be Some(_), got None"
+        );
     }
 
     #[test]
@@ -111,6 +116,9 @@ mod test {
             panic!("Expected Action::UpdateInfo, got {action:?}");
         };
 
-        assert!(params.name.is_none(), "Expected params.name to be None, got Some(_)");
+        assert!(
+            params.name.is_none(),
+            "Expected params.name to be None, got Some(_)"
+        );
     }
 }

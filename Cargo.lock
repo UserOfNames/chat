@@ -291,6 +291,9 @@ dependencies = [
  "directories",
  "figment",
  "futures",
+ "my_fs_utils",
+ "my_macros",
+ "my_string_utils",
  "network_protocol",
  "rcgen",
  "rustls",
@@ -316,6 +319,7 @@ version = "0.1.0"
 dependencies = [
  "figment",
  "futures",
+ "my_macros",
  "network_protocol",
  "rustls",
  "serde",
@@ -1256,6 +1260,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
 
 [[package]]
+name = "my_fs_utils"
+version = "0.1.0"
+source = "git+https://github.com/UserOfNames/my_lib_rs.git#d2d42674a17a6acc740629f68089902c67fa3db3"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
+name = "my_macros"
+version = "0.1.0"
+source = "git+https://github.com/UserOfNames/my_lib_rs.git#d2d42674a17a6acc740629f68089902c67fa3db3"
+
+[[package]]
+name = "my_string_utils"
+version = "0.1.0"
+source = "git+https://github.com/UserOfNames/my_lib_rs.git#d2d42674a17a6acc740629f68089902c67fa3db3"
+
+[[package]]
 name = "network_protocol"
 version = "0.1.0"
 dependencies = [
@@ -1838,6 +1860,8 @@ dependencies = [
  "crossterm",
  "figment",
  "futures",
+ "my_macros",
+ "my_string_utils",
  "ratatui",
  "ratatui-textarea",
  "serde",

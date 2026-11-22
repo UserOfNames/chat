@@ -23,9 +23,9 @@ use figment::{
     providers::{Format, Serialized, Toml},
 };
 use futures::StreamExt;
+use my_macros::first_match;
 use ratatui::{DefaultTerminal, Frame, widgets::Clear};
 use serde::{Deserialize, Serialize};
-use shared_utils::first_match;
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::{Duration, interval},
