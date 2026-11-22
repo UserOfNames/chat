@@ -217,7 +217,7 @@ mod tests {
     use uuid::Uuid;
 
     fn mock_addr() -> SocketAddr {
-        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080))
+        SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 8080))
     }
 
     fn mock_state() -> ConnectionState {

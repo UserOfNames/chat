@@ -39,14 +39,14 @@ impl TryFrom<usize> for Focus {
 }
 
 impl Focus {
-    fn prev(&self) -> Self {
-        (((*self as usize) + FIELD_COUNT - 1) % FIELD_COUNT)
+    fn prev(self) -> Self {
+        (((self as usize) + FIELD_COUNT - 1) % FIELD_COUNT)
             .try_into()
             .expect("Integer range is bounded by variant count, so this can never trigger")
     }
 
-    fn next(&self) -> Self {
-        (((*self as usize) + 1) % FIELD_COUNT)
+    fn next(self) -> Self {
+        (((self as usize) + 1) % FIELD_COUNT)
             .try_into()
             .expect("Integer range is bounded by variant count, so this can never trigger")
     }
@@ -275,7 +275,7 @@ mod test {
         let action = popup.handle_key(press(KeyCode::Enter));
 
         let Action::Connect(params) = action else {
-            panic!("Expected Action::Connect, got {:?}", action);
+            panic!("Expected Action::Connect, got {action:?}");
         };
 
         assert_eq!(params.host, "localhost");
@@ -298,7 +298,7 @@ mod test {
         let action = popup.handle_key(press(KeyCode::Enter));
 
         let Action::Connect(params) = action else {
-            panic!("Expected Action::Connect, got {:?}", action);
+            panic!("Expected Action::Connect, got {action:?}");
         };
 
         assert_eq!(params.host, "localhost");

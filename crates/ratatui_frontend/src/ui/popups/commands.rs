@@ -41,7 +41,17 @@ const fn max_len(index: usize) -> u16 {
         }
         i += 1;
     }
-    max as u16
+
+    usize_to_u16(max)
+}
+
+const fn usize_to_u16(x: usize) -> u16 {
+    // HACK: TryFrom is unusable because const traits are still unstable
+    #[expect(clippy::cast_possible_truncation)]
+    {
+        assert!(x <= u16::MAX as usize);
+        x as u16
+    }
 }
 
 #[derive(Debug)]
@@ -95,8 +105,9 @@ impl Popup for CommandsPopup {
     fn hint_size(&self) -> SizeHint {
         // Extra 2 characters for the borders.
         let width = const { LONGEST_KEY_STR + LONGEST_ACTION_STR + COLUMN_SPACING + 2 };
+
         // + 3 for borders and headers
-        let height = const { (ROW_STRS.len() + 3) as u16 };
+        let height = const { usize_to_u16(ROW_STRS.len() + 3) };
 
         (Constraint::Length(width), Constraint::Length(height))
     }

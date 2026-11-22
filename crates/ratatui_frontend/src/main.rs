@@ -363,6 +363,7 @@ impl App {
             }
 
             // Yielding at the top-level focus is a NOP
+            #[allow(clippy::match_same_arms)]
             Action::YieldFocus => {}
 
             Action::SelectChannel(id) => {

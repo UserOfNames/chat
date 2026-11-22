@@ -166,6 +166,7 @@ impl ServerState {
 
     /// Get a channel's [`ChannelInfo`] by its ID, if the ID is associated with a channel on the
     /// server.
+    #[allow(dead_code)]
     pub async fn get_channel_info(&self, id: ChannelId) -> Option<ChannelInfo> {
         self.channels
             .read_async(&id, |_, channel| channel.info.clone())
@@ -249,6 +250,7 @@ impl ServerState {
     }
 
     /// Get a user's [`UserInfo`] by their ID, if the ID is associated with a user on the server.
+    #[allow(dead_code)]
     pub async fn get_user_info(&self, id: UserId) -> Option<UserInfo> {
         self.users
             .read_async(&id, |_, value| value.info.clone())

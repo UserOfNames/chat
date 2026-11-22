@@ -37,7 +37,7 @@ impl ChannelList {
     pub fn select(&self) -> Option<ChannelId> {
         self.list_state
             .selected()
-            .and_then(|i| self.rendered_order.get(i).cloned())
+            .and_then(|i| self.rendered_order.get(i).copied())
     }
 
     pub fn render(

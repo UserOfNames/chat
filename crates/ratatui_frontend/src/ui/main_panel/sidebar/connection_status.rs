@@ -17,6 +17,7 @@ impl ConnectionStatus {
         Self
     }
 
+    #[expect(clippy::unused_self)]
     pub fn render(&mut self, area: Rect, buf: &mut Buffer, state: Option<&ConnectionState>) {
         let connection_text = if let Some(state) = state {
             Paragraph::new(state.connected_addr.to_string()).green()

@@ -1,3 +1,4 @@
+#[allow(clippy::pedantic)]
 mod proto {
     include!(concat!(env!("OUT_DIR"), "/network_protocol.items.rs"));
 }

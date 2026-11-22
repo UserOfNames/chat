@@ -37,7 +37,7 @@ impl UserList {
     pub fn select(&self) -> Option<UserId> {
         self.list_state
             .selected()
-            .and_then(|i| self.rendered_order.get(i).cloned())
+            .and_then(|i| self.rendered_order.get(i).copied())
     }
 
     pub fn render(
@@ -87,7 +87,7 @@ impl UserList {
         // Special style to set our ID apart
         let your_id_line = Line::from_iter([
             your_id_prefix.into(),
-            format!("{} ", your_name).blue(),
+            format!("{your_name} ").blue(),
             "(you)".into(),
         ]);
 

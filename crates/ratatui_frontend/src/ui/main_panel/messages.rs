@@ -78,6 +78,7 @@ impl Messages {
         }
     }
 
+    #[expect(clippy::unused_self)]
     fn build_message_item<'a>(
         &self,
         message: &'a ReceivedMessage,

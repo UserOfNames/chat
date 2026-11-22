@@ -283,27 +283,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
-name = "chat_backend"
-version = "0.1.0"
-dependencies = [
- "clap",
- "figment",
- "futures",
- "network_protocol",
- "rustls",
- "serde",
- "shared_utils",
- "thiserror 2.0.21",
- "tokio",
- "tokio-rustls",
- "tokio-test",
- "tokio-util",
- "tracing",
- "webpki-roots",
-]
-
-[[package]]
-name = "chat_server"
+name = "chat-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -328,6 +308,24 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "zeroize",
+]
+
+[[package]]
+name = "chat_backend"
+version = "0.1.0"
+dependencies = [
+ "figment",
+ "futures",
+ "network_protocol",
+ "rustls",
+ "serde",
+ "shared_utils",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tracing",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -1263,7 +1261,6 @@ version = "0.1.0"
 dependencies = [
  "prost",
  "prost-build",
- "prost-types",
  "serde",
  "tokio-util",
  "uuid",
@@ -1832,6 +1829,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratatui-frontend"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chat_backend",
+ "clap",
+ "crossterm",
+ "figment",
+ "futures",
+ "ratatui",
+ "ratatui-textarea",
+ "serde",
+ "shared_utils",
+ "textwrap",
+ "tokio",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "ratatui-macros"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1893,28 +1912,6 @@ dependencies = [
  "time",
  "unicode-segmentation",
  "unicode-width",
-]
-
-[[package]]
-name = "ratatui_frontend"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chat_backend",
- "clap",
- "crossterm",
- "figment",
- "futures",
- "ratatui",
- "ratatui-textarea",
- "serde",
- "shared_utils",
- "textwrap",
- "tokio",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
@@ -2604,17 +2601,6 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-util",
-]
-
-[[package]]
-name = "tokio-test"
-version = "0.4.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12bc5db7778a8e08ee255090861e0e7aac55e784300077e7ed293c7be36168b2"
-dependencies = [
- "futures-core",
- "tokio",
- "tokio-stream",
 ]
 
 [[package]]

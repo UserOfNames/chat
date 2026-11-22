@@ -1,5 +1,5 @@
 [package]
-name = "ratatui_frontend"
+name = "ratatui-frontend"
 version = "0.1.0"
 edition = "2024"
 
@@ -21,3 +21,6 @@ uuid = { workspace = true }
 
 chat_backend = { workspace = true }
 shared_utils = { workspace = true }
+
+[lints]
+workspace = true

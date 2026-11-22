@@ -105,7 +105,7 @@ impl KeyHandler for MainPanel {
                     Action::None
                 }
 
-                KeyCode::Char('c') | KeyCode::Char('u') => {
+                KeyCode::Char('c' | 'u') => {
                     self.focus = Focus::Sidebar;
                     self.sidebar.handle_key(key);
                     Action::None
@@ -179,7 +179,7 @@ mod tests {
     #[test]
     fn test_typing_and_sending_message() {
         let mut panel = MainPanel::new();
-        
+
         // Enter input mode
         panel.handle_key(press(KeyCode::Char('i')));
 
@@ -192,16 +192,16 @@ mod tests {
 
         // Press Enter
         let action = panel.handle_key(press(KeyCode::Enter));
-        
+
         // Verify action is dispatched with the correct text
         match action {
             Action::SendMessage(msg) => assert_eq!(msg, "hi"),
-            _ => panic!("Expected SendMessage, got {:?}", action),
+            _ => panic!("Expected SendMessage, got {action:?}"),
         }
 
         // Verify the input box was cleared for the next message
         assert_eq!(panel.input.lines().join(""), "");
-        assert_eq!(panel.focus, Focus::Input); 
+        assert_eq!(panel.focus, Focus::Input);
     }
 
     #[test]
@@ -226,7 +226,7 @@ mod tests {
 
         // When unfocused, Esc should open the command palette
         let action = panel.handle_key(press(KeyCode::Esc));
-        
+
         assert!(matches!(action, Action::PushPopup(_)));
     }
 }

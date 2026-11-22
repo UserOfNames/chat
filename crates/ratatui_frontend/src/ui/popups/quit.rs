@@ -35,7 +35,7 @@ impl Popup for QuitPopup {
             .title_alignment(Alignment::Center)
             .render(area, buf);
 
-        let text = vec![
+        let text = [
             Line::from("Are you sure you want to quit?").centered(),
             Line::from(""),
             Line::from(vec![
@@ -47,11 +47,16 @@ impl Popup for QuitPopup {
             .centered(),
         ];
 
-        let [area] = Layout::vertical([Constraint::Length(text.len() as u16)])
+        let text_len: u16 = text
+            .len()
+            .try_into()
+            .expect("`text.len()` < 65535");
+
+        let [area] = Layout::vertical([Constraint::Length(text_len)])
             .flex(Flex::Center)
             .areas(area);
 
-        Paragraph::new(text)
+        Paragraph::new(text.as_slice())
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true })
             .render(area, buf);
@@ -82,14 +87,29 @@ mod test {
         let mut popup = QuitPopup::create();
 
         // Yes triggers Quit
-        assert!(matches!(popup.handle_key(press(KeyCode::Char('y'))), Action::Quit));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Char('y'))),
+            Action::Quit
+        ));
 
         // No or Esc triggers PopPopup
-        assert!(matches!(popup.handle_key(press(KeyCode::Char('n'))), Action::PopPopup));
-        assert!(matches!(popup.handle_key(press(KeyCode::Esc)), Action::PopPopup));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Char('n'))),
+            Action::PopPopup
+        ));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Esc)),
+            Action::PopPopup
+        ));
 
         // Anything else is ignored
-        assert!(matches!(popup.handle_key(press(KeyCode::Enter)), Action::None));
-        assert!(matches!(popup.handle_key(press(KeyCode::Char('q'))), Action::None));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Enter)),
+            Action::None
+        ));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Char('q'))),
+            Action::None
+        ));
     }
 }

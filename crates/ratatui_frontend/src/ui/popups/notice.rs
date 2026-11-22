@@ -45,7 +45,9 @@ impl NoticePopup {
     /// height of the popup). The total lines alone is likely not the final height of the popup. To
     /// compute that, pass the total line count to `Self::final_height`.
     ///
-    /// Returns (target_width, total_lines).
+    /// Returns `(target_width, total_lines)`.
+    // TODO: This abstraction is brittle. Find a better way.
+    #[allow(clippy::cast_possible_truncation)]
     fn content_dimensions(&self) -> (u16, u16) {
         let max_line_len = self
             .message
@@ -74,7 +76,7 @@ impl NoticePopup {
     }
 
     /// Helper to compute the height of the popup, given the wrapped line count.
-    fn target_height(&self, total_lines: u16) -> u16 {
+    fn target_height(total_lines: u16) -> u16 {
         total_lines
             .saturating_add(Self::Y_PADDING)
             .clamp(Self::MIN_HEIGHT, Self::MAX_HEIGHT)
@@ -93,7 +95,7 @@ impl KeyHandler for NoticePopup {
 
             KeyCode::Down | KeyCode::Char('j') => {
                 let (_, total_lines) = self.content_dimensions();
-                let target_height = self.target_height(total_lines);
+                let target_height = Self::target_height(total_lines);
                 let visible_height = target_height.saturating_sub(Self::Y_PADDING);
 
                 let max_scroll = total_lines.saturating_sub(visible_height);
@@ -131,7 +133,7 @@ impl Popup for NoticePopup {
 
     fn hint_size(&self) -> SizeHint {
         let (target_width, total_lines) = self.content_dimensions();
-        let target_height = self.target_height(total_lines);
+        let target_height = Self::target_height(total_lines);
 
         (
             Constraint::Length(target_width),
@@ -184,7 +186,7 @@ mod test {
         assert_eq!(width, NoticePopup::MIN_WIDTH);
         assert_eq!(lines, 1);
 
-        let height = popup.target_height(lines);
+        let height = NoticePopup::target_height(lines);
         assert_eq!(height, NoticePopup::MIN_HEIGHT);
     }
 
@@ -203,7 +205,7 @@ mod test {
         // Inner width is 80. 200 chars / 80 = 25 -> ceil to 25 lines.
         assert_eq!(lines, 25); 
 
-        let height = popup.target_height(lines);
+        let height = NoticePopup::target_height(lines);
         // 25 lines should be clamped to the MAX_HEIGHT
         assert_eq!(height, NoticePopup::MAX_HEIGHT); 
     }
