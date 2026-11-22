@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use shared_utils::first_match;
 
 use crate::{
-    DefaultPaths,
+    default_paths::DefaultPaths,
     init::{WriteParams, write_with_params},
 };
 
@@ -49,26 +49,26 @@ pub struct InitPkiArgs {
 
 pub fn init_pki(default_paths: Option<DefaultPaths>, args: InitPkiArgs) -> anyhow::Result<()> {
     let ca_cert_path = first_match! {
-        Some(path) = &args.ca_cert_path => path,
-        Some(defaults) = &default_paths => &defaults.ca_cert,
+        Some(path) = args.ca_cert_path.as_deref() => path,
+        Some(defaults) = &default_paths => defaults.ca_cert(),
     }
     .context("Resolving path for CA certificate file")?;
 
     let ca_key_path = first_match! {
-        Some(path) = &args.ca_key_path => path,
-        Some(defaults) = &default_paths => &defaults.ca_key,
+        Some(path) = args.ca_key_path.as_deref() => path,
+        Some(defaults) = &default_paths => defaults.ca_key(),
     }
     .context("Resolving path for CA key file")?;
 
     let server_cert_path = first_match! {
-        Some(path) = &args.server_cert_path => path,
-        Some(defaults) = &default_paths => &defaults.server_cert,
+        Some(path) = args.server_cert_path.as_deref() => path,
+        Some(defaults) = &default_paths => defaults.server_cert(),
     }
     .context("Resolving server path for certificate file")?;
 
     let server_key_path = first_match! {
-        Some(path) = &args.server_key_path => path,
-        Some(defaults) = &default_paths => &defaults.server_key,
+        Some(path) = args.server_key_path.as_deref() => path,
+        Some(defaults) = &default_paths => defaults.server_key(),
     }
     .context("Resolving output path for private key file")?;
 

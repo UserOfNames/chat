@@ -31,7 +31,7 @@ use tracing::{debug, info, instrument};
 use tracing_appender::{non_blocking::WorkerGuard, rolling};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{DEFAULT_CONFIG, DefaultPaths, ENV_VAR_PREFIX};
+use crate::{DEFAULT_CONFIG, ENV_VAR_PREFIX, default_paths::DefaultPaths};
 
 #[derive(Debug, Args, Serialize, Deserialize)]
 pub struct RunArgs {
@@ -241,9 +241,9 @@ pub async fn main(default_paths: Option<DefaultPaths>, args: RunArgs) -> anyhow:
         .map(PathBuf::from);
 
     let config_path = first_match! {
-        Some(path) = &args.config_file => path.clone(),
-        Some(path) = env_conf_path => path,
-        Some(defaults) = &default_paths => defaults.config.clone(),
+        Some(path) = args.config_file.as_deref() => path,
+        Some(path) = env_conf_path.as_deref() => path,
+        Some(defaults) = &default_paths => defaults.config(),
     };
 
     let mut figment = Figment::new().merge(Toml::string(DEFAULT_CONFIG));
@@ -253,14 +253,14 @@ pub async fn main(default_paths: Option<DefaultPaths>, args: RunArgs) -> anyhow:
     }
 
     if let Some(defaults) = &default_paths {
-        figment = figment.merge(Serialized::default("tls_cert_path", &defaults.server_cert));
-        figment = figment.merge(Serialized::default("tls_key_path", &defaults.server_key));
-        figment = figment.merge(Serialized::default("log_dir", &defaults.log_dir));
+        figment = figment.merge(Serialized::default("tls_cert_path", defaults.server_cert()));
+        figment = figment.merge(Serialized::default("tls_key_path", defaults.server_key()));
+        figment = figment.merge(Serialized::default("log_dir", defaults.log_dir()));
     }
 
     let config: Config = figment
         .merge(Env::prefixed(ENV_VAR_PREFIX))
-        .merge(Serialized::defaults(args))
+        .merge(Serialized::defaults(&args))
         .extract()
         .context("Resolving configuration")?;
 

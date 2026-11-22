@@ -6,7 +6,7 @@ use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair};
 use serde::{Deserialize, Serialize};
 use shared_utils::first_match;
 
-use crate::DefaultPaths;
+use crate::default_paths::DefaultPaths;
 
 use super::{WriteParams, write_with_params};
 
@@ -34,14 +34,14 @@ pub fn init_ca_certs(
     args: InitCACertsArgs,
 ) -> anyhow::Result<()> {
     let output_cert_path = first_match! {
-        Some(path) = &args.output_cert_path => path,
-        Some(defaults) = &default_paths => &defaults.ca_cert,
+        Some(path) = args.output_cert_path.as_deref() => path,
+        Some(defaults) = &default_paths => defaults.ca_cert(),
     }
     .context("Resolving output path for certificate file")?;
 
     let output_key_path = first_match! {
-        Some(path) = &args.output_key_path => path,
-        Some(defaults) = &default_paths => &defaults.ca_key,
+        Some(path) = args.output_key_path.as_deref() => path,
+        Some(defaults) = &default_paths => defaults.ca_key(),
     }
     .context("Resolving output path for private key file")?;
 

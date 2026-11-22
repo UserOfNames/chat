@@ -1,4 +1,5 @@
 mod connection_state;
+mod default_paths;
 mod ui;
 
 use std::{
@@ -24,7 +25,7 @@ use figment::{
 use futures::StreamExt;
 use ratatui::{DefaultTerminal, Frame, widgets::Clear};
 use serde::{Deserialize, Serialize};
-use shared_utils::{files::NamedProjectDirs, first_match};
+use shared_utils::first_match;
 use tokio::{
     sync::mpsc::{Receiver, Sender},
     time::{Duration, interval},
@@ -34,6 +35,7 @@ use tracing_appender::{non_blocking::WorkerGuard, rolling};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use connection_state::{ConnectionState, MessageContext};
+use default_paths::DefaultPaths;
 use ui::{
     Action, KeyHandler,
     main_panel::MainPanel,
@@ -44,28 +46,6 @@ use ui::{
 };
 
 const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");
-
-#[derive(Debug)]
-struct DefaultPaths {
-    config: PathBuf,
-    log_dir: PathBuf,
-}
-
-impl DefaultPaths {
-    /// Initialize a `DefaultPaths` instance.
-    ///
-    /// # Default paths
-    /// `config`: `NamedProjectDirs::config_dir()/config.toml`
-    fn defaults(component: impl Into<PathBuf>) -> Option<Self> {
-        let base = NamedProjectDirs::new(component)?;
-
-        let config = base.config_dir().join("config.toml");
-
-        let log_dir = base.state_dir().to_owned();
-
-        Some(Self { config, log_dir })
-    }
-}
 
 /// Ratatui client UI.
 #[derive(Debug, Parser, Serialize, Deserialize)]
@@ -431,7 +411,7 @@ async fn main() -> anyhow::Result<()> {
             "Config path: {}",
             default_paths
                 .context("Could not resolve default config path")?
-                .config
+                .config()
                 .display()
         );
 
@@ -449,7 +429,7 @@ async fn main() -> anyhow::Result<()> {
         },
 
         Some(defaults) = &default_paths => {
-            let default_path = &defaults.config;
+            let default_path = defaults.config();
 
             if default_path.exists() {
                 figment = figment.merge(Toml::file(default_path));
@@ -462,7 +442,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     if let Some(defaults) = &default_paths {
-        figment = figment.merge(Serialized::default("log_dir", &defaults.log_dir));
+        figment = figment.merge(Serialized::default("log_dir", defaults.log_dir()));
     }
 
     let config: Config = figment.extract().context("Resolving config")?;

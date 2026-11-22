@@ -5,7 +5,7 @@ use clap::Args;
 use serde::{Deserialize, Serialize};
 use shared_utils::first_match;
 
-use crate::{DEFAULT_CONFIG, DefaultPaths};
+use crate::{DEFAULT_CONFIG, default_paths::DefaultPaths};
 
 use super::{WriteParams, write_with_params};
 
@@ -30,8 +30,8 @@ pub fn init_config(
     args: InitConfigArgs,
 ) -> anyhow::Result<()> {
     let config_path = first_match! {
-        Some(path) = &args.path => path,
-        Some(defaults) = &default_paths => &defaults.config,
+        Some(path) = args.path.as_deref() => path,
+        Some(defaults) = &default_paths => defaults.config(),
     }
     .context("Resolving config file path")?;
 
