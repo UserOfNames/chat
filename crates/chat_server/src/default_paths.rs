@@ -10,7 +10,6 @@ pub struct DefaultPaths {
     ca_key: PathBuf,
     server_cert: PathBuf,
     server_key: PathBuf,
-    log_dir: PathBuf,
 }
 
 impl DefaultPaths {
@@ -22,7 +21,6 @@ impl DefaultPaths {
     /// `ca_key`: `NamedProjectDirs::data_dir()/tls/ca/key.pem`
     /// `server_cert`: `NamedProjectDirs::data_dir()/tls/server/certificate.pem`
     /// `server_key`: `NamedProjectDirs::data_dir()/tls/server/key.pem`
-    /// `log_dir`: `NamedProjectDirs::state_dir()`
     pub fn defaults(component: impl Into<PathBuf>) -> Option<Self> {
         let base = NamedProjectDirs::new(component)?;
 
@@ -36,15 +34,12 @@ impl DefaultPaths {
         let server_cert = server_cert_dir.join("certificate.pem");
         let server_key = server_cert_dir.join("key.pem");
 
-        let log_dir = base.state_dir().to_owned();
-
         Some(Self {
             config,
             ca_cert,
             ca_key,
             server_cert,
             server_key,
-            log_dir,
         })
     }
 
@@ -66,9 +61,5 @@ impl DefaultPaths {
 
     pub fn server_key(&self) -> &Path {
         self.server_key.as_path()
-    }
-
-    pub fn log_dir(&self) -> &Path {
-        self.log_dir.as_path()
     }
 }

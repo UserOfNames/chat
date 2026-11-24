@@ -163,15 +163,27 @@ mod test {
         let mut popup = ConnectPopup::create();
 
         // Esc triggers PopPopup
-        assert!(matches!(popup.handle_key(press(KeyCode::Esc)), Action::PopPopup));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Esc)),
+            Action::PopPopup
+        ));
 
         // Up or 'k' scrolls up, triggering None
         assert!(matches!(popup.handle_key(press(KeyCode::Up)), Action::None));
-        assert!(matches!(popup.handle_key(press(KeyCode::Char('k'))), Action::None));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Char('k'))),
+            Action::None
+        ));
 
         // Down or 'j' scrolls down, triggering None
-        assert!(matches!(popup.handle_key(press(KeyCode::Down)), Action::None));
-        assert!(matches!(popup.handle_key(press(KeyCode::Char('j'))), Action::None));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Down)),
+            Action::None
+        ));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Char('j'))),
+            Action::None
+        ));
     }
 
     #[test]
@@ -203,11 +215,11 @@ mod test {
         assert_eq!(width, NoticePopup::MAX_WIDTH);
 
         // Inner width is 80. 200 chars / 80 = 25 -> ceil to 25 lines.
-        assert_eq!(lines, 25); 
+        assert_eq!(lines, 25);
 
         let height = NoticePopup::target_height(lines);
         // 25 lines should be clamped to the MAX_HEIGHT
-        assert_eq!(height, NoticePopup::MAX_HEIGHT); 
+        assert_eq!(height, NoticePopup::MAX_HEIGHT);
     }
 
     #[test]

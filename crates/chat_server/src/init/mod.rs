@@ -10,27 +10,33 @@ use clap::Subcommand;
 use my_fs_utils::WriteParams;
 use serde::{Deserialize, Serialize};
 
-use ca_certs::{InitCACertsArgs, init_ca_certs};
-use config::{InitConfigArgs, init_config};
-use server_certs::{InitServerCertsArgs, init_server_certs};
-
 use crate::DefaultPaths;
-use crate::init::pki::{InitPkiArgs, init_pki};
 
 #[derive(Debug, Subcommand, Serialize, Deserialize)]
-pub enum InitMode {
+pub enum Mode {
     /// Initialize a default config file
-    Config(InitConfigArgs),
+    Config(config::Args),
 
     /// Initialize a root CA certificate and key
-    CaCerts(InitCACertsArgs),
+    CaCerts(ca_certs::Args),
 
     /// Initialize your own PKI: root CA certificate and key file, and signed certificates to go
     /// with them
-    Pki(InitPkiArgs),
+    Pki(pki::Args),
 
     /// Initialize a CA-signed private key and certificate for TLS
-    ServerCerts(InitServerCertsArgs),
+    ServerCerts(server_certs::Args),
+}
+
+impl Mode {
+    pub fn run(self, default_paths: Option<DefaultPaths>) -> anyhow::Result<()> {
+        match self {
+            Self::CaCerts(args) => args.run(default_paths),
+            Self::Config(args) => args.run(default_paths),
+            Self::Pki(args) => args.run(default_paths),
+            Self::ServerCerts(args) => args.run(default_paths),
+        }
+    }
 }
 
 /// Helper function to make using [`WriteParams`] a bit easier within the needs of this project
@@ -40,10 +46,7 @@ pub enum InitMode {
 ///     * `make_parents(true)`
 ///     * `atomic(true)`
 ///     * Everything else (besides mode) must be set manually
-fn write_with_params(
-    params: WriteParams,
-    mode: Option<u32>,
-) -> io::Result<()> {
+fn write_with_params(params: WriteParams, mode: Option<u32>) -> io::Result<()> {
     let mut params = params.make_parents(true).atomic(true);
 
     #[cfg(unix)]
@@ -53,13 +56,4 @@ fn write_with_params(
     }
 
     params.write()
-}
-
-pub fn main(default_paths: Option<DefaultPaths>, mode: InitMode) -> anyhow::Result<()> {
-    match mode {
-        InitMode::Config(args) => init_config(default_paths, args),
-        InitMode::CaCerts(args) => init_ca_certs(default_paths, args),
-        InitMode::Pki(args) => init_pki(default_paths, args),
-        InitMode::ServerCerts(args) => init_server_certs(default_paths, args),
-    }
 }

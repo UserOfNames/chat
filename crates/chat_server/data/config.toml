@@ -16,10 +16,7 @@ max_username_length = 20
 # Whether to write logs to standard output.
 log_to_stdout = true
 
-# Whether to write logs to a file.
-log_to_file = false
-
-# Directory to store the log file if `log_to_file` is true.
+# Log to the given directory. If unset, don't use file logging.
 # log_dir = ""
 
 # List of all the channels on the server.

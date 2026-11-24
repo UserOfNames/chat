@@ -47,10 +47,7 @@ impl Popup for QuitPopup {
             .centered(),
         ];
 
-        let text_len: u16 = text
-            .len()
-            .try_into()
-            .expect("`text.len()` < 65535");
+        let text_len: u16 = text.len().try_into().expect("`text.len()` < 65535");
 
         let [area] = Layout::vertical([Constraint::Length(text_len)])
             .flex(Flex::Center)

@@ -6,8 +6,6 @@ use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
 use default_paths::DefaultPaths;
-use init::InitMode;
-use run::RunArgs;
 
 const ENV_VAR_PREFIX: &str = "MY_CHAT_";
 const DEFAULT_CONFIG: &str = include_str!("../data/config.toml");
@@ -24,20 +22,20 @@ struct Cli {
 enum Commands {
     /// Initialize essential state for the server
     #[command(subcommand)]
-    Init(InitMode),
+    Init(init::Mode),
 
     /// Start the server
-    Run(RunArgs),
+    Run(run::Args),
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let global_args = Cli::parse();
+    let args = Cli::parse();
 
     let default_paths = DefaultPaths::defaults("server");
 
-    match global_args.command {
-        Commands::Run(args) => run::main(default_paths, args).await,
-        Commands::Init(mode) => init::main(default_paths, mode),
+    match args.command {
+        Commands::Init(mode) => mode.run(default_paths),
+        Commands::Run(args) => args.run(default_paths).await,
     }
 }

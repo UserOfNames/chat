@@ -1,5 +1,6 @@
 use chat_backend::client_command::ConnectParams;
 use crossterm::event::{KeyCode, KeyEvent};
+use my_string_utils::StringExt;
 use ratatui::{
     buffer::Buffer,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -8,7 +9,6 @@ use ratatui::{
     widgets::{Block, Borders, Widget},
 };
 use ratatui_textarea::TextArea;
-use my_string_utils::StringExt;
 
 use super::{
     Action, KeyHandler, Popup, SizeHint,
@@ -244,12 +244,24 @@ mod test {
         let mut popup = ConnectPopup::create();
 
         // Esc triggers PopPopup
-        assert!(matches!(popup.handle_key(press(KeyCode::Esc)), Action::PopPopup));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Esc)),
+            Action::PopPopup
+        ));
 
         // Tab/Down and BackTab/Up cycle Focus, triggering None
-        assert!(matches!(popup.handle_key(press(KeyCode::Tab)), Action::None));
-        assert!(matches!(popup.handle_key(press(KeyCode::Down)), Action::None));
-        assert!(matches!(popup.handle_key(press(KeyCode::BackTab)), Action::None));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Tab)),
+            Action::None
+        ));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Down)),
+            Action::None
+        ));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::BackTab)),
+            Action::None
+        ));
         assert!(matches!(popup.handle_key(press(KeyCode::Up)), Action::None));
 
         // Enter triggers Connect, but this cannot easily be tested here, as it requires more setup.

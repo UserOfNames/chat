@@ -1,3 +1,4 @@
+use anyhow::Context;
 use my_string_utils::StringExt;
 use network_protocol::{
     ChannelId, ChannelInfo, ErrorEvent, ErrorKind, NetworkEvent, UpdateInfo, UserId, UserInfo,
@@ -5,10 +6,13 @@ use network_protocol::{
 use scc::{HashMap, HashSet};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc};
+use tracing::debug;
 
 use crate::run::{Channel, User};
 
 const ALLOWED_NON_ALPHANUMERIC_CHARACTERS: [char; 2] = ['_', '-'];
+const CHANNEL_INIT_CAPACITY: usize = 64;
+const USER_INIT_CAPACITY: usize = 4096;
 
 /// Error when handling a username.
 #[derive(Debug, Clone, Error)]
@@ -128,9 +132,6 @@ pub struct ServerState {
 impl ServerState {
     /// Initialize a `ServerState` instance.
     pub fn new(default_channel_id: Option<ChannelId>, max_username_length: usize) -> Self {
-        const CHANNEL_INIT_CAPACITY: usize = 64;
-        const USER_INIT_CAPACITY: usize = 4096;
-
         Self {
             default_channel_id,
             max_username_length,
@@ -139,6 +140,37 @@ impl ServerState {
             users: HashMap::with_capacity(USER_INIT_CAPACITY),
             taken_names: HashSet::with_capacity(USER_INIT_CAPACITY),
         }
+    }
+
+    /// Initialize a `ServerState` instance with a list of channels.
+    ///
+    /// # Errors
+    /// Fails if a duplicate channel ID is registered.
+    pub fn new_with_channels(
+        max_username_length: usize,
+        channels: Vec<ChannelInfo>,
+    ) -> anyhow::Result<Self> {
+        if channels.is_empty() {
+            return Ok(Self::new(None, max_username_length));
+        }
+
+        let default_channel_id = Some(channels[0].id);
+        let res = Self::new(default_channel_id, max_username_length);
+
+        for channel_info in channels {
+            let (tx, _rx) = broadcast::channel(256);
+
+            debug!(
+                channel_id = %channel_info.id,
+                channel_name = %channel_info.name,
+                "Registering channel"
+            );
+
+            res.add_channel_sync(channel_info.id, channel_info.name, tx)
+                .with_context(|| format!("Initializing channel with ID '{}'", channel_info.id))?;
+        }
+
+        Ok(res)
     }
 
     /// Get the default channel ID, if there is one.
@@ -214,7 +246,8 @@ impl ServerState {
     /// Channels may have duplicate names.
     ///
     /// # Errors
-    /// Returns [`ChannelError`] if a called with an ID that is already present.
+    /// Returns [`ChannelError`] if called with an ID that is already present.
+    #[allow(dead_code)]
     pub async fn add_channel(
         &self,
         id: ChannelId,
@@ -231,6 +264,31 @@ impl ServerState {
         self.channels
             .insert_async(id, channel)
             .await
+            .map_err(|_| ChannelError::AlreadyExists(id))
+    }
+
+    /// Synchronously add a new channel to the server.
+    ///
+    /// It is the server administrator's responsibility to ensure that each channel has a unique ID.
+    /// Channels may have duplicate names.
+    ///
+    /// # Errors
+    /// Returns [`ChannelError`] if called with an ID that is already present.
+    pub fn add_channel_sync(
+        &self,
+        id: ChannelId,
+        name: String,
+        event_tx: broadcast::Sender<NetworkEvent>,
+    ) -> Result<(), ChannelError> {
+        let channel_info = ChannelInfo { id, name };
+
+        let channel = Channel {
+            info: channel_info,
+            broadcast: event_tx,
+        };
+
+        self.channels
+            .insert_sync(id, channel)
             .map_err(|_| ChannelError::AlreadyExists(id))
     }
 

@@ -2,7 +2,6 @@ use std::fs;
 use std::path::PathBuf;
 
 use anyhow::Context;
-use clap::Args;
 use my_fs_utils::WriteParams;
 use my_macros::first_match;
 use rcgen::{CertificateParams, IsCa, Issuer, KeyPair};
@@ -12,8 +11,8 @@ use crate::default_paths::DefaultPaths;
 
 use super::write_with_params;
 
-#[derive(Debug, Args, Serialize, Deserialize)]
-pub struct InitServerCertsArgs {
+#[derive(Debug, clap::Args, Serialize, Deserialize)]
+pub struct Args {
     /// Subject Alternative Names. Defaults to `["localhost", "127.0.0.1", "::1"]` if empty
     #[arg(
         short,
@@ -48,98 +47,98 @@ pub struct InitServerCertsArgs {
     ca_key_path: Option<PathBuf>,
 }
 
-pub fn init_server_certs(
-    default_paths: Option<DefaultPaths>,
-    args: InitServerCertsArgs,
-) -> anyhow::Result<()> {
-    let ca_cert_path = first_match! {
-        Some(path) = args.ca_cert_path.as_deref() => path,
-        Some(defaults) = &default_paths => defaults.ca_cert(),
+impl Args {
+    pub fn run(self, default_paths: Option<DefaultPaths>) -> anyhow::Result<()> {
+        let ca_cert_path = first_match! {
+            Some(path) = self.ca_cert_path.as_deref() => path,
+            Some(defaults) = &default_paths => defaults.ca_cert(),
+        }
+        .context("Resolving path for CA certificate file")?;
+
+        let ca_key_path = first_match! {
+            Some(path) = self.ca_key_path.as_deref() => path,
+            Some(defaults) = &default_paths => defaults.ca_key(),
+        }
+        .context("Resolving path for CA key file")?;
+
+        let output_cert_path = first_match! {
+            Some(path) = self.output_cert_path.as_deref() => path,
+            Some(defaults) = &default_paths => defaults.server_cert(),
+        }
+        .context("Resolving output path for certificate file")?;
+
+        let output_key_path = first_match! {
+            Some(path) = self.output_key_path.as_deref() => path,
+            Some(defaults) = &default_paths => defaults.server_key(),
+        }
+        .context("Resolving output path for private key file")?;
+
+        if self.dry_run {
+            println!("CA cert path: '{}'", ca_cert_path.display());
+            println!("CA key path: '{}'", ca_key_path.display());
+            println!("Server cert path: '{}'", output_cert_path.display());
+            println!("Server key path: '{}'", output_key_path.display());
+            return Ok(());
+        }
+
+        let ca_cert_pem = fs::read_to_string(ca_cert_path).with_context(|| {
+            format!(
+                "Reading CA certificate file from {}",
+                ca_cert_path.display()
+            )
+        })?;
+
+        let ca_key_pem = fs::read_to_string(ca_key_path).with_context(|| {
+            format!("Reading CA private key file from {}", ca_key_path.display())
+        })?;
+
+        let ca_keypair = KeyPair::from_pem(&ca_key_pem).with_context(|| {
+            format!(
+                "Resolving CA private key PEM from file {}",
+                ca_key_path.display()
+            )
+        })?;
+
+        let ca_issuer = Issuer::from_ca_cert_pem(&ca_cert_pem, ca_keypair)
+            .context("Resolving CA credentials from certificate and key")?;
+
+        let new_cert_keypair = KeyPair::generate().context("Generating keypair for new cert")?;
+
+        let mut cert_params =
+            CertificateParams::new(self.subject_alt_names).context("Generating certificate")?;
+        cert_params.is_ca = IsCa::ExplicitNoCa;
+
+        let new_cert_pem = cert_params
+            .signed_by(&new_cert_keypair, &ca_issuer)
+            .context("Signing new cert")?
+            .pem();
+
+        let new_keypair_pem = new_cert_keypair.serialize_pem();
+
+        write_with_params(
+            WriteParams::new(&output_key_path, &new_keypair_pem).force(self.force),
+            Some(0o600),
+        )?;
+        println!(
+            "Server private key initialized at '{}'",
+            output_key_path.display()
+        );
+
+        write_with_params(
+            WriteParams::new(&output_cert_path, &new_cert_pem).force(self.force),
+            None,
+        )?;
+        println!(
+            "Server certificate initialized at '{}'",
+            output_cert_path.display()
+        );
+
+        #[cfg(not(unix))]
+        eprintln!(
+            "WARNING: permissions cannot be set on non-unix platforms.\n\
+             Ensure the key file's permissions are correct."
+        );
+
+        Ok(())
     }
-    .context("Resolving path for CA certificate file")?;
-
-    let ca_key_path = first_match! {
-        Some(path) = args.ca_key_path.as_deref() => path,
-        Some(defaults) = &default_paths => defaults.ca_key(),
-    }
-    .context("Resolving path for CA key file")?;
-
-    let output_cert_path = first_match! {
-        Some(path) = args.output_cert_path.as_deref() => path,
-        Some(defaults) = &default_paths => defaults.server_cert(),
-    }
-    .context("Resolving output path for certificate file")?;
-
-    let output_key_path = first_match! {
-        Some(path) = args.output_key_path.as_deref() => path,
-        Some(defaults) = &default_paths => defaults.server_key(),
-    }
-    .context("Resolving output path for private key file")?;
-
-    if args.dry_run {
-        println!("CA cert path: '{}'", ca_cert_path.display());
-        println!("CA key path: '{}'", ca_key_path.display());
-        println!("Server cert path: '{}'", output_cert_path.display());
-        println!("Server key path: '{}'", output_key_path.display());
-        return Ok(());
-    }
-
-    let ca_cert_pem = fs::read_to_string(ca_cert_path).with_context(|| {
-        format!(
-            "Reading CA certificate file from {}",
-            ca_cert_path.display()
-        )
-    })?;
-
-    let ca_key_pem = fs::read_to_string(ca_key_path)
-        .with_context(|| format!("Reading CA private key file from {}", ca_key_path.display()))?;
-
-    let ca_keypair = KeyPair::from_pem(&ca_key_pem).with_context(|| {
-        format!(
-            "Resolving CA private key PEM from file {}",
-            ca_key_path.display()
-        )
-    })?;
-
-    let ca_issuer = Issuer::from_ca_cert_pem(&ca_cert_pem, ca_keypair)
-        .context("Resolving CA credentials from certificate and key")?;
-
-    let new_cert_keypair = KeyPair::generate().context("Generating keypair for new cert")?;
-
-    let mut cert_params =
-        CertificateParams::new(args.subject_alt_names).context("Generating certificate")?;
-    cert_params.is_ca = IsCa::ExplicitNoCa;
-
-    let new_cert_pem = cert_params
-        .signed_by(&new_cert_keypair, &ca_issuer)
-        .context("Signing new cert")?
-        .pem();
-
-    let new_keypair_pem = new_cert_keypair.serialize_pem();
-
-    write_with_params(
-        WriteParams::new(&output_key_path, &new_keypair_pem).force(args.force),
-        Some(0o600),
-    )?;
-    println!(
-        "Server private key initialized at '{}'",
-        output_key_path.display()
-    );
-
-    write_with_params(
-        WriteParams::new(&output_cert_path, &new_cert_pem).force(args.force),
-        None,
-    )?;
-    println!(
-        "Server certificate initialized at '{}'",
-        output_cert_path.display()
-    );
-
-    #[cfg(not(unix))]
-    eprintln!(
-        "WARNING: permissions cannot be set on non-unix platforms.\n\
-         Ensure the key file's permissions are correct."
-    );
-
-    Ok(())
 }

@@ -133,19 +133,37 @@ mod test {
         let mut popup = CommandsPopup::create();
 
         // Esc returns PopPopup
-        assert!(matches!(popup.handle_key(press(KeyCode::Esc)), Action::PopPopup));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Esc)),
+            Action::PopPopup
+        ));
 
         // 'q' spawns a QuitPopup
-        assert!(matches!(popup.handle_key(press(KeyCode::Char('q'))), Action::PushPopup(_)));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Char('q'))),
+            Action::PushPopup(_)
+        ));
 
         // 'c' spawns a ConnectPopup
-        assert!(matches!(popup.handle_key(press(KeyCode::Char('c'))), Action::PushPopup(_)));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Char('c'))),
+            Action::PushPopup(_)
+        ));
 
         // 'u' spawns a UpdateInfoPopup
-        assert!(matches!(popup.handle_key(press(KeyCode::Char('u'))), Action::PushPopup(_)));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Char('u'))),
+            Action::PushPopup(_)
+        ));
 
         // All else is ignored
-        assert!(matches!(popup.handle_key(press(KeyCode::Char('a'))), Action::None));
-        assert!(matches!(popup.handle_key(press(KeyCode::Char('3'))), Action::None));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Char('a'))),
+            Action::None
+        ));
+        assert!(matches!(
+            popup.handle_key(press(KeyCode::Char('3'))),
+            Action::None
+        ));
     }
 }

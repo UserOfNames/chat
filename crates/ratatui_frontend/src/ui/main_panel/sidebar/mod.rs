@@ -175,7 +175,7 @@ mod tests {
         let action = sidebar.handle_key(press(KeyCode::Char('u')));
         assert!(matches!(action, Action::None));
         assert_eq!(sidebar.focus, Focus::Users);
-        
+
         // Escape yields focus back again
         let action = sidebar.handle_key(press(KeyCode::Esc));
         assert!(matches!(action, Action::YieldFocus));
@@ -185,8 +185,8 @@ mod tests {
     #[should_panic(expected = "If the sidebar is unfocused")]
     fn test_unfocused_sidebar_panics_on_invalid_input() {
         let mut sidebar = Sidebar::new();
-        
-        // If the MainPanel routes a random key (like 'j') to the sidebar 
+
+        // If the MainPanel routes a random key (like 'j') to the sidebar
         // while it is Unfocused, the sidebar should panic to flag the routing bug.
         sidebar.handle_key(press(KeyCode::Char('j')));
     }
