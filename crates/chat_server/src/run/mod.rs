@@ -1,6 +1,8 @@
+mod channels;
 mod connection;
 mod listener;
 mod server_state;
+mod users;
 
 use std::{
     borrow::Cow,
@@ -15,14 +17,13 @@ use figment::{
     Figment,
     providers::{Env, Format, Serialized, Toml},
 };
-use network_protocol::{ChannelInfo, NetworkEvent, UserInfo};
+use network_protocol::ChannelInfo;
 use rustls::{
     ServerConfig,
     pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
 };
 use serde::{Deserialize, Serialize};
 use shared_utils::files::TildeRelativePathBuf;
-use tokio::sync::{broadcast, mpsc};
 use tokio_rustls::TlsAcceptor;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
@@ -33,20 +34,6 @@ use tracing_appender::{non_blocking::WorkerGuard, rolling};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{DEFAULT_CONFIG, ENV_VAR_PREFIX, default_paths::DefaultPaths};
-
-/// Represents a connected user.
-#[derive(Debug, Clone)]
-struct User {
-    pub info: UserInfo,
-    pub sender: mpsc::Sender<NetworkEvent>,
-}
-
-/// Represents a channel.
-#[derive(Debug, Clone)]
-struct Channel {
-    pub info: ChannelInfo,
-    pub broadcast: broadcast::Sender<NetworkEvent>,
-}
 
 /// Configuration for the server runtime.
 #[derive(Debug, Serialize, Deserialize)]

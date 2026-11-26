@@ -3,7 +3,10 @@ use std::sync::Arc;
 use network_protocol::{NetworkEvent, UserId};
 use tracing::warn;
 
-use crate::run::server_state::{ServerState, UserError, UserToken};
+use crate::run::{
+    server_state::{ServerState, UserToken},
+    users::UserError,
+};
 
 /// RAII guard that automatically unregisters a user when dropped.
 #[derive(Debug)]
